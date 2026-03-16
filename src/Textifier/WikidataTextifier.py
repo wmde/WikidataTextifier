@@ -113,7 +113,7 @@ class WikidataEntity:
     def __bool__(self) -> bool:
         return bool(self.id) and self.label is not None and str(self.label) != ""
 
-    def to_text(self, lang='en') -> str:
+    def to_text(self, lang='en', keep_empty: bool = False) -> str:
         lang_var = LANGUAGE_VARIABLES.get(lang, LANGUAGE_VARIABLES.get('en'))
 
         label_str = str(self.label) if self.label else '<missing>'
@@ -125,7 +125,9 @@ class WikidataEntity:
             string += f"{lang_var[', ']}{lang_var['also known as']}"
             string += f" {lang_var[', '].join(map(str, self.aliases))}"
 
-        attributes = [c.to_text(lang) for c in self.claims if c]
+        attributes = [c.to_text(lang, keep_empty=keep_empty) \
+                      for c in self.claims \
+                        if keep_empty or c]
         if len(attributes) > 0:
             attributes = "\n- ".join(attributes)
             string += f". {lang_var['Attributes include']}:\n- {attributes}"
@@ -177,9 +179,6 @@ class WikidataClaim:
 
     def to_text(self, lang='en') -> str:
         lang_var = LANGUAGE_VARIABLES.get(lang, LANGUAGE_VARIABLES.get('en'))
-
-        if not self:
-            return ""
 
         if self.values:
             values = lang_var[', '].join(v.to_text(lang) for v in self.values if v)
