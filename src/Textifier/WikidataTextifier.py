@@ -15,6 +15,7 @@ with LANGUAGE_VARIABLES_PATH.open("r", encoding="utf-8") as f:
 # Atomic value types
 # ---------------------------------------------------------------------------
 
+
 @dataclass(slots=True)
 class WikidataText:
     """Object for Wikidata plain text values."""
@@ -124,6 +125,7 @@ class WikidataQuantity:
 # Core graph types
 # ---------------------------------------------------------------------------
 
+
 @dataclass(slots=True)
 class WikidataEntity:
     """Object for Wikidata entities."""
@@ -138,11 +140,11 @@ class WikidataEntity:
         """Return whether this entity has a usable id and label."""
         return bool(self.id) and self.label is not None and str(self.label) != ""
 
-    def to_text(self, lang='en', keep_empty: bool = False) -> str:
+    def to_text(self, lang="en", keep_empty: bool = False) -> str:
         """Render the entity into a readable text."""
-        lang_var = LANGUAGE_VARIABLES.get(lang, LANGUAGE_VARIABLES.get('en'))
+        lang_var = LANGUAGE_VARIABLES.get(lang, LANGUAGE_VARIABLES.get("en"))
 
-        label_str = str(self.label) if self.label else '<missing>'
+        label_str = str(self.label) if self.label else "<missing>"
         string = label_str
 
         if self.description:
@@ -206,12 +208,12 @@ class WikidataClaim:
             and any(bool(v) for v in self.values)
         )
 
-    def to_text(self, lang='en') -> str:
+    def to_text(self, lang="en") -> str:
         """Render the claim into a readable text."""
-        lang_var = LANGUAGE_VARIABLES.get(lang, LANGUAGE_VARIABLES.get('en'))
+        lang_var = LANGUAGE_VARIABLES.get(lang, LANGUAGE_VARIABLES.get("en"))
 
         if self.values:
-            values = lang_var[', '].join(v.to_text(lang) for v in self.values if v)
+            values = lang_var[", "].join(v.to_text(lang) for v in self.values if v)
             return f"{str(self.property.label)}: {values}"
 
         return f"{lang_var['has']} {str(self.property.label)}"
@@ -249,10 +251,9 @@ class WikidataClaim:
 @dataclass(slots=True)
 class WikidataClaimValue:
     """Object for Wikidata claim values."""
+
     claim: WikidataClaim
-    value: Optional[
-        Union[WikidataEntity, WikidataQuantity, WikidataTime, WikidataCoordinates, WikidataText]
-    ] = None
+    value: Optional[Union[WikidataEntity, WikidataQuantity, WikidataTime, WikidataCoordinates, WikidataText]] = None
     qualifiers: List[WikidataClaim] = field(default_factory=list)
     references: List[List[WikidataClaim]] = field(default_factory=list)
     rank: Optional[str] = None  # preferred|normal|deprecated
@@ -261,9 +262,9 @@ class WikidataClaimValue:
         """Return whether this claim value has non-empty values."""
         return self.value is not None and str(self.value) != ""
 
-    def to_text(self, lang='en') -> str:
+    def to_text(self, lang="en") -> str:
         """Render the value and qualifiers as readable text."""
-        lang_var = LANGUAGE_VARIABLES.get(lang, LANGUAGE_VARIABLES.get('en'))
+        lang_var = LANGUAGE_VARIABLES.get(lang, LANGUAGE_VARIABLES.get("en"))
 
         if not self:
             return ""

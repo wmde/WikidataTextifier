@@ -94,7 +94,7 @@ class TTLNormalizer:
         references: bool = False,
         all_ranks: bool = False,
         qualifiers: bool = True,
-        filter_pids: List[str] = []
+        filter_pids: List[str] = [],
     ) -> WikidataEntity:
         """Normalize the parsed graph into a ``WikidataEntity`` tree.
 
@@ -134,7 +134,7 @@ class TTLNormalizer:
             include_references=references,
             all_ranks=all_ranks,
             qualifiers=qualifiers,
-            filter_pids=filter_pids
+            filter_pids=filter_pids,
         )
 
         entity = WikidataEntity(
@@ -191,7 +191,7 @@ class TTLNormalizer:
         include_references: bool,
         all_ranks: bool,
         qualifiers: bool,
-        filter_pids: List[str] = []
+        filter_pids: List[str] = [],
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Return mapping: pid -> list of statement dicts."""
         out: DefaultDict[str, List[Dict[str, Any]]] = defaultdict(list)
@@ -335,7 +335,7 @@ class TTLNormalizer:
 
             refs_obj: List[List[WikidataClaim]] = []
             if include_references:
-                for ref in (st.get("references") or []):
+                for ref in st.get("references") or []:
                     ref_claims = [
                         self._build_snak_claim(
                             pid=rpid,

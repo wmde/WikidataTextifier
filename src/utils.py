@@ -14,10 +14,11 @@ adapter = HTTPAdapter(pool_connections=20, pool_maxsize=20)
 SESSION.mount("http://", adapter)
 SESSION.mount("https://", adapter)
 
+
 def get_wikidata_ttl_by_id(
-        id,
-        lang='en',
-    ):
+    id,
+    lang="en",
+):
     """Fetch a Wikidata entity as TTL from ``Special:EntityData``.
 
     Args:
@@ -31,11 +32,9 @@ def get_wikidata_ttl_by_id(
         requests.HTTPError: If Wikidata returns an error response.
     """
     params = {
-        'uselang': lang,
+        "uselang": lang,
     }
-    headers = {
-        'User-Agent': 'Wikidata Textifier (embeddings@wikimedia.de)'
-    }
+    headers = {"User-Agent": "Wikidata Textifier (embeddings@wikimedia.de)"}
 
     response = SESSION.get(
         f"https://www.wikidata.org/wiki/Special:EntityData/{id}.ttl",
@@ -47,10 +46,7 @@ def get_wikidata_ttl_by_id(
     return response.text
 
 
-def get_wikidata_json_by_ids(
-        ids,
-        props='labels|descriptions|aliases|claims'
-    ):
+def get_wikidata_json_by_ids(ids, props="labels|descriptions|aliases|claims"):
     """Fetch one or more Wikidata entities from ``wbgetentities``.
 
     Args:
@@ -64,7 +60,7 @@ def get_wikidata_json_by_ids(
         requests.HTTPError: If Wikidata returns an error response.
     """
     if isinstance(ids, str):
-        ids = ids.split('|')
+        ids = ids.split("|")
     ids = list(dict.fromkeys(ids))  # Ensure unique IDs
 
     entities_data = {}
@@ -72,18 +68,15 @@ def get_wikidata_json_by_ids(
     # Wikidata API has a limit on the number of IDs per request,
     # typically 50 for wbgetentities.
     for chunk_idx in range(0, len(ids), 50):
-
-        ids_chunk = ids[chunk_idx:chunk_idx+50]
+        ids_chunk = ids[chunk_idx : chunk_idx + 50]
         params = {
-            'action': 'wbgetentities',
-            'ids': "|".join(ids_chunk),
-            'props': props,
-            'format': 'json',
-            'origin': '*',
+            "action": "wbgetentities",
+            "ids": "|".join(ids_chunk),
+            "props": props,
+            "format": "json",
+            "origin": "*",
         }
-        headers = {
-            'User-Agent': 'Wikidata Textifier (embeddings@wikimedia.de)'
-        }
+        headers = {"User-Agent": "Wikidata Textifier (embeddings@wikimedia.de)"}
 
         response = SESSION.get(
             "https://www.wikidata.org/w/api.php?",
@@ -101,6 +94,7 @@ def get_wikidata_json_by_ids(
 #####################################
 # Formatting
 #####################################
+
 
 def wikidata_time_to_text(value: dict, lang: str = "en"):
     """Format a time datavalue into localized display text using a local Wikibase instance.
@@ -139,12 +133,16 @@ def wikidata_time_to_text(value: dict, lang: str = "en"):
         },
     }
 
-    r = SESSION.post(WIKIBASE_API, data={
-        "action": "wbformatvalue",
-        "format": "json",
-        "uselang": lang,
-        "datavalue": json.dumps(datavalue),
-    }, timeout=REQUEST_TIMEOUT_SECONDS)
+    r = SESSION.post(
+        WIKIBASE_API,
+        data={
+            "action": "wbformatvalue",
+            "format": "json",
+            "uselang": lang,
+            "datavalue": json.dumps(datavalue),
+        },
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
     r.raise_for_status()
 
     data = r.json()
@@ -181,12 +179,16 @@ def wikidata_geolocation_to_text(value: dict, lang: str = "en"):
         },
     }
 
-    r = SESSION.post(WIKIBASE_API, data={
-        "action": "wbformatvalue",
-        "format": "json",
-        "uselang": lang,
-        "datavalue": json.dumps(datavalue),
-    }, timeout=REQUEST_TIMEOUT_SECONDS)
+    r = SESSION.post(
+        WIKIBASE_API,
+        data={
+            "action": "wbformatvalue",
+            "format": "json",
+            "uselang": lang,
+            "datavalue": json.dumps(datavalue),
+        },
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
     r.raise_for_status()
 
     data = r.json()

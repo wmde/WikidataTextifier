@@ -21,10 +21,7 @@ LABEL_TTL_DAYS = int(os.environ.get("LABEL_TTL_DAYS", "90"))
 LABEL_MAX_ROWS = int(os.environ.get("LABEL_MAX_ROWS", "10000000"))
 REQUEST_TIMEOUT_SECONDS = float(os.environ.get("REQUEST_TIMEOUT_SECONDS", "15"))
 
-DATABASE_URL = (
-    f"mariadb+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    f"?charset=utf8mb4"
-)
+DATABASE_URL = f"mariadb+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 
 engine = create_engine(
     DATABASE_URL,
@@ -41,7 +38,7 @@ Session = sessionmaker(bind=engine, expire_on_commit=False)
 class WikidataLabel(Base):
     """Database cache for multilingual Wikidata labels."""
 
-    __tablename__ = 'labels'
+    __tablename__ = "labels"
     id = Column(String(64), primary_key=True)
     labels = Column(JSON, default=dict)
     date_added = Column(DateTime, default=datetime.now, index=True)
@@ -70,20 +67,22 @@ class WikidataLabel(Base):
             return True
 
         for i in range(len(data)):
-            data[i]['date_added'] = datetime.now()
+            data[i]["date_added"] = datetime.now()
             if isinstance(data[i].get("labels"), dict):
                 data[i]["labels"] = json.dumps(data[i]["labels"], ensure_ascii=False, separators=(",", ":"))
 
-
         with Session() as session:
             try:
-                session.execute(text('''
+                session.execute(
+                    text("""
                     INSERT INTO labels (id, labels, date_added)
                     VALUES (:id, :labels, :date_added)
                     ON DUPLICATE KEY UPDATE
                     labels = VALUES(labels),
                     date_added = VALUES(date_added)
-                '''), data)
+                """),
+                    data,
+                )
 
                 session.commit()
                 return True
@@ -105,10 +104,7 @@ class WikidataLabel(Base):
         """
         with Session() as session:
             try:
-                new_entry = WikidataLabel(
-                    id=id,
-                    labels=labels
-                )
+                new_entry = WikidataLabel(id=id, labels=labels)
                 session.add(new_entry)
                 session.commit()
                 return True
@@ -130,12 +126,12 @@ class WikidataLabel(Base):
         try:
             with Session() as session:
                 # Get labels that are less than LABEL_TTL_DAYS old
-                date_limit = (datetime.now() - timedelta(days=LABEL_TTL_DAYS))
-                item = session.query(WikidataLabel)\
-                    .filter(
-                        WikidataLabel.id == id,
-                        WikidataLabel.date_added >= date_limit
-                    ).first()
+                date_limit = datetime.now() - timedelta(days=LABEL_TTL_DAYS)
+                item = (
+                    session.query(WikidataLabel)
+                    .filter(WikidataLabel.id == id, WikidataLabel.date_added >= date_limit)
+                    .first()
+                )
 
                 if item is not None:
                     return item.labels or {}
@@ -165,12 +161,12 @@ class WikidataLabel(Base):
         try:
             with Session() as session:
                 # Get labels that are less than LABEL_TTL_DAYS old
-                date_limit = (datetime.now() - timedelta(days=LABEL_TTL_DAYS))
-                rows = session.query(WikidataLabel.id, WikidataLabel.labels)\
-                    .filter(
-                        WikidataLabel.id.in_(ids),
-                        WikidataLabel.date_added >= date_limit
-                    ).all()
+                date_limit = datetime.now() - timedelta(days=LABEL_TTL_DAYS)
+                rows = (
+                    session.query(WikidataLabel.id, WikidataLabel.labels)
+                    .filter(WikidataLabel.id.in_(ids), WikidataLabel.date_added >= date_limit)
+                    .all()
+                )
                 labels = {id: labels for id, labels in rows}
         except Exception as e:
             print(f"Error while fetching cached labels in bulk: {e}")
@@ -182,10 +178,9 @@ class WikidataLabel(Base):
             labels.update(missing_labels)
 
             # Cache labels
-            WikidataLabel.add_bulk_labels([
-                {'id': entity_id, 'labels': entity_labels}
-                for entity_id, entity_labels in missing_labels.items()
-            ])
+            WikidataLabel.add_bulk_labels(
+                [{"id": entity_id, "labels": entity_labels} for entity_id, entity_labels in missing_labels.items()]
+            )
 
         return labels
 
@@ -202,11 +197,8 @@ class WikidataLabel(Base):
         with Session() as session:
             try:
                 # Step 1: Delete labels older than X days
-                date_limit = (datetime.now() - timedelta(days=LABEL_TTL_DAYS))
-                session.execute(
-                    text("DELETE FROM labels WHERE date_added < :date_limit"),
-                    {"date_limit": date_limit}
-                )
+                date_limit = datetime.now() - timedelta(days=LABEL_TTL_DAYS)
+                session.execute(text("DELETE FROM labels WHERE date_added < :date_limit"), {"date_limit": date_limit})
                 session.commit()
 
                 # Step 2: Check total count
@@ -228,7 +220,7 @@ class WikidataLabel(Base):
                                 LIMIT :rows_to_delete
                             ) AS old_labels ON l.id = old_labels.id
                         """),
-                        {"rows_to_delete": rows_to_delete}
+                        {"rows_to_delete": rows_to_delete},
                     )
 
                     session.commit()
@@ -265,17 +257,14 @@ class WikidataLabel(Base):
         """
         new_labels = {}
         for qid, labels in data.items():
-            if 'labels' in labels:
-                new_labels[qid] = {
-                    lang: label.get('value') \
-                        for lang, label in labels['labels'].items()
-                }
+            if "labels" in labels:
+                new_labels[qid] = {lang: label.get("value") for lang, label in labels["labels"].items()}
             else:
                 new_labels[qid] = {}
         return new_labels
 
     @staticmethod
-    def get_lang_val(data, lang='en', fallback_lang=None):
+    def get_lang_val(data, lang="en", fallback_lang=None):
         """Return the best label text from a labels dictionary.
 
         Args:
@@ -286,13 +275,13 @@ class WikidataLabel(Base):
         Returns:
             str: Selected label text, or an empty string when missing.
         """
-        label = data.get(lang, data.get('mul', {}))
+        label = data.get(lang, data.get("mul", {}))
         if fallback_lang and not label:
             label = data.get(fallback_lang, {})
 
         if isinstance(label, str):
             return label
-        return label.get('value', '')
+        return label.get("value", "")
 
     @staticmethod
     def get_all_missing_labels_ids(data):
@@ -307,16 +296,18 @@ class WikidataLabel(Base):
         ids_list = set()
 
         if isinstance(data, dict):
-            if 'property' in data:
-                ids_list.add(data['property'])
-            if ('unit' in data) and (data['unit'] != '1'):
-                ids_list.add(data['unit'].split('/')[-1])
-            if ('datatype' in data) and \
-                ('datavalue' in data) and \
-                (data['datatype'] in ['wikibase-item', 'wikibase-property']):
-                ids_list.add(data['datavalue']['value']['id'])
-            if ('claims' in data) and isinstance(data['claims'], dict):
-                ids_list = ids_list | data['claims'].keys()
+            if "property" in data:
+                ids_list.add(data["property"])
+            if ("unit" in data) and (data["unit"] != "1"):
+                ids_list.add(data["unit"].split("/")[-1])
+            if (
+                ("datatype" in data)
+                and ("datavalue" in data)
+                and (data["datatype"] in ["wikibase-item", "wikibase-property"])
+            ):
+                ids_list.add(data["datavalue"]["value"]["id"])
+            if ("claims" in data) and isinstance(data["claims"], dict):
+                ids_list = ids_list | data["claims"].keys()
 
             for _, value in data.items():
                 ids_list = ids_list | WikidataLabel.get_all_missing_labels_ids(value)
@@ -326,6 +317,7 @@ class WikidataLabel(Base):
                 ids_list = ids_list | WikidataLabel.get_all_missing_labels_ids(item)
 
         return ids_list
+
 
 class LazyLabel:
     """Deferred label string that resolves via a shared factory."""
@@ -349,7 +341,7 @@ class LazyLabel:
 class LazyLabelFactory:
     """Create and batch-resolve lazy Wikidata labels."""
 
-    def __init__(self, lang='en', fallback_lang='en'):
+    def __init__(self, lang="en", fallback_lang="en"):
         """Initialize a lazy label factory.
 
         Args:

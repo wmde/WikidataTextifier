@@ -48,7 +48,6 @@ class JSONNormalizer:
         self.fallback_lang = fallback_lang
         self.debug = debug
 
-
         self.label_factory = label_factory or LazyLabelFactory(lang=lang, fallback_lang=fallback_lang)
 
     # -------------------------------------------------------------------------
@@ -119,7 +118,7 @@ class JSONNormalizer:
                 external_ids=external_ids,
                 include_references=references,
                 all_ranks=all_ranks,
-                qualifiers=qualifiers
+                qualifiers=qualifiers,
             )
             if claim_obj is not None and claim_obj.values:
                 claims_out.append(claim_obj)
@@ -171,7 +170,7 @@ class JSONNormalizer:
                 statement=st,
                 datatype=datatype,
                 include_references=include_references,
-                qualifiers=qualifiers
+                qualifiers=qualifiers,
             )
             if cv is not None:
                 values.append(cv)
