@@ -1,13 +1,14 @@
+"""Normalize Wikidata TTL into internal textifier objects."""
+
 from __future__ import annotations
 
 from collections import defaultdict
 from typing import Any, DefaultDict, Dict, List, Optional, Set
-import requests
 
+import requests
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF, RDFS
 
-from ..WikidataLabel import WikidataLabel, LazyLabelFactory
 from ..Textifier.WikidataTextifier import (
     WikidataClaim,
     WikidataClaimValue,
@@ -18,9 +19,9 @@ from ..Textifier.WikidataTextifier import (
     WikidataTime,
 )
 from ..utils import wikidata_geolocation_to_text, wikidata_time_to_text
+from ..WikidataLabel import LazyLabelFactory, WikidataLabel
 
-
-# Namespaces used by Wikidata TTL exports
+# Namespaces used by Wikidata TTL
 WD = Namespace("http://www.wikidata.org/entity/")
 P = Namespace("http://www.wikidata.org/prop/")
 PS = Namespace("http://www.wikidata.org/prop/statement/")
@@ -39,18 +40,18 @@ PROV = Namespace("http://www.w3.org/ns/prov#")
 
 
 class TTLNormalizer:
-    """Parse a Wikidata Special:EntityData TTL and build a WikidataEntity with claims.
+    """Normalize ``Special:EntityData`` TTL into internal textifier objects.
 
     Label resolution order:
-      1) labels present in TTL
-      2) LazyLabelFactory bulk lookup for the remainder
+        1) Labels present in TTL.
+        2) ``LazyLabelFactory`` bulk lookup for unresolved IDs.
 
     Notes:
-      - Claims are extracted from wd:<Q> p:<P> <statement-node> triples only.
-      - Statement nodes are validated structurally before value extraction.
-      - Special values (somevalue/novalue) are treated as "no main value" when
+        - Claims are extracted from ``wd:<Q> p:<P> <statement-node>`` triples only.
+        - Statement nodes are validated structurally before value extraction.
+        - Special values (somevalue/novalue) are treated as "no main value" when
         neither ps:<pid> nor psv:<pid> is present on the statement node.
-      - Property datatype is read from wikibase:propertyType when available,
+        - Property datatype is read from ``wikibase:propertyType`` when available,
         otherwise inferred from the statement's value nodes when possible.
     """
 
@@ -63,6 +64,16 @@ class TTLNormalizer:
         label_factory: Optional[LazyLabelFactory] = None,
         debug: bool = False,
     ):
+        """Initialize a normalizer for a single TTL document.
+
+        Args:
+            entity_id (str): Entity ID being normalized.
+            ttl_text (str): Raw TTL document from ``Special:EntityData``.
+            lang (str): Preferred language for label selection.
+            fallback_lang (str): Fallback language when ``lang`` is unavailable.
+            label_factory (LazyLabelFactory | None): Shared lazy label factory for nested entities.
+            debug (bool): Whether to print additional debug output while parsing.
+        """
         self.entity_id = entity_id
         self.g = Graph()
         self.g.parse(data=ttl_text, format="turtle")
@@ -85,6 +96,18 @@ class TTLNormalizer:
         qualifiers: bool = True,
         filter_pids: List[str] = []
     ) -> WikidataEntity:
+        """Normalize the parsed graph into a ``WikidataEntity`` tree.
+
+        Args:
+            external_ids (bool): Whether to include ``external-id`` datatype claims.
+            references (bool): Whether to include references for each statement value.
+            all_ranks (bool): Whether to include statements of all ranks.
+            qualifiers (bool): Whether to include qualifiers for statement values.
+            filter_pids (list[str]): Optional allow-list of property IDs to keep.
+
+        Returns:
+            WikidataEntity: Parsed entity object with claims and values.
+        """
         # Preload labels found inside TTL so LazyLabelFactory can avoid lookups.
         self.label_factory._resolved_labels = self._build_label_cache_from_ttl()
 

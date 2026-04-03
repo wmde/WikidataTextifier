@@ -1,9 +1,11 @@
+"""Data structures for Wikidata entities and serialization helpers."""
+
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
-import json
 
 LANGUAGE_VARIABLES_PATH = Path(__file__).with_name("language_variables.json")
 with LANGUAGE_VARIABLES_PATH.open("r", encoding="utf-8") as f:
@@ -15,32 +17,42 @@ with LANGUAGE_VARIABLES_PATH.open("r", encoding="utf-8") as f:
 
 @dataclass(slots=True)
 class WikidataText:
+    """Object for Wikidata plain text values."""
+
     text: Optional[str] = None
 
     def __str__(self) -> str:
+        """Return the text representation."""
         return self.text or ""
 
     def __bool__(self) -> bool:
+        """Return whether this text wrapper contains content."""
         return bool(self.text)
 
     def to_json(self) -> Optional[str]:
+        """Serialize to a JSON-friendly scalar."""
         return self.text
 
 
 @dataclass(slots=True)
 class WikidataCoordinates:
+    """Object for Wikidata coordinate values."""
+
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     string_val: Optional[str] = None
 
     def __str__(self) -> str:
+        """Return a readable coordinate string."""
         return self.string_val or ""
 
     def __bool__(self) -> bool:
+        """Return whether both latitude and longitude are present."""
         # coordinates are meaningful if we have both lat/lon
         return self.latitude is not None and self.longitude is not None
 
     def to_json(self) -> Dict[str, Any]:
+        """Serialize coordinates to a JSON object."""
         return {
             "latitude": self.latitude,
             "longitude": self.longitude,
@@ -50,18 +62,23 @@ class WikidataCoordinates:
 
 @dataclass(slots=True)
 class WikidataTime:
+    """Object for Wikidata time values."""
+
     time: Optional[str] = None
     precision: Optional[int] = None
     calendarmodel: Optional[str] = None
     string_val: Optional[str] = None
 
     def __str__(self) -> str:
+        """Return a readable time string."""
         return self.string_val or ""
 
     def __bool__(self) -> bool:
+        """Return whether this instance contains a time value."""
         return bool(self.time) or bool(self.string_val)
 
     def to_json(self) -> Dict[str, Any]:
+        """Serialize time to a JSON object."""
         return {
             "time": self.time,
             "precision": self.precision,
@@ -72,11 +89,14 @@ class WikidataTime:
 
 @dataclass(slots=True)
 class WikidataQuantity:
+    """Object for Wikidata quantity values."""
+
     amount: Optional[str] = None
     unit: Optional[Any] = None
     unit_id: Optional[str] = None
 
     def __str__(self) -> str:
+        """Return a readable quantity string."""
         if not self.amount:
             return ""
         if self.unit_id:
@@ -84,9 +104,11 @@ class WikidataQuantity:
         return str(self.amount)
 
     def __bool__(self) -> bool:
+        """Return whether this quantity has an amount."""
         return bool(self.amount)
 
     def to_json(self) -> Any:
+        """Serialize quantity to a scalar or object."""
         if not self.amount:
             return None
         if self.unit_id:
@@ -104,6 +126,8 @@ class WikidataQuantity:
 
 @dataclass(slots=True)
 class WikidataEntity:
+    """Object for Wikidata entities."""
+
     id: str
     label: Optional[Any] = None
     description: Optional[str] = None
@@ -111,9 +135,11 @@ class WikidataEntity:
     claims: List["WikidataClaim"] = field(default_factory=list)
 
     def __bool__(self) -> bool:
+        """Return whether this entity has a usable id and label."""
         return bool(self.id) and self.label is not None and str(self.label) != ""
 
     def to_text(self, lang='en') -> str:
+        """Render the entity into a readable text."""
         lang_var = LANGUAGE_VARIABLES.get(lang, LANGUAGE_VARIABLES.get('en'))
 
         label_str = str(self.label) if self.label else '<missing>'
@@ -135,6 +161,7 @@ class WikidataEntity:
         return string
 
     def to_json(self) -> Dict[str, Any]:
+        """Serialize the entity to a JSON object."""
         id_key = "PID" if self.id.startswith("P") else "QID"
         return {
             id_key: self.id,
@@ -145,6 +172,7 @@ class WikidataEntity:
         }
 
     def to_triplet(self) -> str:
+        """Render the entity as triplet lines."""
         head = f"{str(self.label) if self.label else '<missing>'} ({self.id})"
         lines: List[str] = []
         if self.description:
@@ -162,12 +190,15 @@ class WikidataEntity:
 
 @dataclass(slots=True)
 class WikidataClaim:
+    """Object for Wikidata claims."""
+
     subject: WikidataEntity
     property: WikidataEntity
     values: List["WikidataClaimValue"] = field(default_factory=list)
     datatype: str = "string"
 
     def __bool__(self) -> bool:
+        """Return whether this claim contains a value."""
         return (
             self.property is not None
             and str(self.property.label) != ""
@@ -176,6 +207,7 @@ class WikidataClaim:
         )
 
     def to_text(self, lang='en') -> str:
+        """Render the claim into a readable text."""
         lang_var = LANGUAGE_VARIABLES.get(lang, LANGUAGE_VARIABLES.get('en'))
 
         if not self:
@@ -188,6 +220,7 @@ class WikidataClaim:
         return f"{lang_var['has']} {str(self.property.label)}"
 
     def to_json(self) -> Dict[str, Any]:
+        """Serialize the claim to a JSON object."""
         prop_json = self.property.to_json()
         prop_id = prop_json.get("PID") or prop_json.get("QID")
         return {
@@ -198,6 +231,7 @@ class WikidataClaim:
         }
 
     def to_triplet(self, as_qualifier: bool = False) -> str:
+        """Render the claim as triplet text."""
         if not self:
             return ""
 
@@ -217,6 +251,7 @@ class WikidataClaim:
 
 @dataclass(slots=True)
 class WikidataClaimValue:
+    """Object for Wikidata claim values."""
     claim: WikidataClaim
     value: Optional[
         Union[WikidataEntity, WikidataQuantity, WikidataTime, WikidataCoordinates, WikidataText]
@@ -226,9 +261,11 @@ class WikidataClaimValue:
     rank: Optional[str] = None  # preferred|normal|deprecated
 
     def __bool__(self) -> bool:
+        """Return whether this claim value has non-empty values."""
         return self.value is not None and str(self.value) != ""
 
     def to_text(self, lang='en') -> str:
+        """Render the value and qualifiers as readable text."""
         lang_var = LANGUAGE_VARIABLES.get(lang, LANGUAGE_VARIABLES.get('en'))
 
         if not self:
@@ -249,6 +286,7 @@ class WikidataClaimValue:
         return s
 
     def to_json(self) -> Optional[Dict[str, Any]]:
+        """Serialize the claim value to a JSON object."""
         if not self:
             return None
 
@@ -281,6 +319,7 @@ class WikidataClaimValue:
         return out
 
     def to_triplet(self) -> str:
+        """Render the value as triplet text."""
         if not self:
             return ""
 

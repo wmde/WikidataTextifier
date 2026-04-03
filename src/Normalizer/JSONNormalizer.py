@@ -1,9 +1,11 @@
+"""Normalize Wikidata Action API JSON into internal textifier objects."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+
 import requests
 
-from ..WikidataLabel import WikidataLabel, LazyLabelFactory
 from ..Textifier.WikidataTextifier import (
     WikidataClaim,
     WikidataClaimValue,
@@ -14,11 +16,11 @@ from ..Textifier.WikidataTextifier import (
     WikidataTime,
 )
 from ..utils import wikidata_geolocation_to_text, wikidata_time_to_text
+from ..WikidataLabel import LazyLabelFactory, WikidataLabel
 
 
 class JSONNormalizer:
-    """Build WikidataEntity + claims tree from Wikidata JSON (wbgetentities style).
-    """
+    """Normalize ``wbgetentities`` JSON into internal textifier objects."""
 
     def __init__(
         self,
@@ -29,6 +31,16 @@ class JSONNormalizer:
         label_factory: Optional[LazyLabelFactory] = None,
         debug: bool = False,
     ):
+        """Initialize a normalizer for a single entity payload.
+
+        Args:
+            entity_id (str): Entity ID being normalized.
+            entity_json (dict[str, Any]): Raw ``wbgetentities`` JSON for ``entity_id``.
+            lang (str): Preferred language for label selection.
+            fallback_lang (str): Fallback language when ``lang`` is unavailable.
+            label_factory (LazyLabelFactory | None): Shared lazy label factory for nested entities.
+            debug (bool): Whether to print additional debug output while parsing.
+        """
         self.entity_id = entity_id
         self.entity_json = entity_json
 
@@ -51,6 +63,18 @@ class JSONNormalizer:
         qualifiers: bool = True,
         filter_pids: List[str] = [],
     ) -> WikidataEntity:
+        """Normalize the entity JSON payload into a ``WikidataEntity`` tree.
+
+        Args:
+            external_ids (bool): Whether to include ``external-id`` datatype claims.
+            references (bool): Whether to include references for each statement value.
+            all_ranks (bool): Whether to include statements of all ranks.
+            qualifiers (bool): Whether to include qualifiers for statement values.
+            filter_pids (list[str]): Optional allow-list of property IDs to keep.
+
+        Returns:
+            WikidataEntity: Parsed entity object with claims and values.
+        """
         e = self.entity_json
         if not isinstance(e, dict) or "labels" not in e:
             if self.debug:
