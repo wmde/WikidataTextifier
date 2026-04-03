@@ -1,14 +1,16 @@
-from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi import BackgroundTasks
-import traceback
-import requests
-import time
-import os
+"""FastAPI application that exposes Wikidata textification endpoints."""
 
-from src.Normalizer import TTLNormalizer, JSONNormalizer
-from src.WikidataLabel import WikidataLabel, LazyLabelFactory
+import os
+import time
+import traceback
+
+import requests
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+
 from src import utils
+from src.Normalizer import JSONNormalizer, TTLNormalizer
+from src.WikidataLabel import LazyLabelFactory, WikidataLabel
 
 # Start Fastapi app
 app = FastAPI(
@@ -34,6 +36,7 @@ _last_label_cleanup = 0.0
 
 @app.on_event("startup")
 async def startup():
+    """Initialize database resources required by the API."""
     WikidataLabel.initialize_database()
 
 @app.get(
@@ -71,22 +74,26 @@ async def get_textified_wd(
     qualifiers: bool = True,
     fallback_lang: str = 'en'
 ):
-    """
-    Retrieve a Wikidata item with all labels or textual representations for an LLM.
+    """Return normalized Wikidata entities in JSON, text, or triplet format.
 
     Args:
-        id (str): The Wikidata item ID (e.g., "Q42").
-        pid (str): Comma-separated list of property IDs to filter claims (e.g., "P31,P279").
-        format (str): The format of the response, either 'json', 'text', or 'triplet'.
-        lang (str): The language code for labels (default is 'en').
-        external_ids (bool): If True, includes external IDs in the response.
-        all_ranks (bool): If True, includes statements of all ranks (preferred, normal, deprecated).
-        references (bool): If True, includes references in the response. (only available in JSON format)
-        qualifiers (bool): If True, includes qualifiers in the response.
-        fallback_lang (str): The fallback language code if the preferred language is not available.
+        request (Request): Incoming request object (currently unused).
+        background_tasks (BackgroundTasks): Background task queue for periodic cache cleanup.
+        id (str): Comma-separated entity IDs (for example, ``"Q42,Q2"``).
+        pid (str): Optional comma-separated property IDs used to filter claims.
+        lang (str): Preferred language code for labels and formatted values.
+        format (str): Output format: ``"json"``, ``"text"``, or ``"triplet"``.
+        external_ids (bool): Whether to include claims with the ``external-id`` datatype.
+        references (bool): Whether to include references in claim values.
+        all_ranks (bool): Whether to include all statement ranks (preferred, normal, deprecated).
+        qualifiers (bool): Whether to include qualifiers in claim values.
+        fallback_lang (str): Fallback language when ``lang`` is unavailable.
 
     Returns:
-        list: A list of dictionaries containing QIDs and the similarity scores.
+        dict[str, object | None]: Mapping of requested QIDs to their normalized payloads.
+
+    Raises:
+        HTTPException: If an entity is not found, an upstream request fails, or internal processing fails.
     """
     try:
         filter_pids = []
