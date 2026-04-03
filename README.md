@@ -3,7 +3,7 @@
 **Wikidata Textifier** is an API that transforms Wikidata entities into compact outputs for LLM and GenAI use cases.
 It resolves missing labels for properties and claim values using the Wikidata Action API and caches labels to reduce repeated lookups.
 
-Live API: [wd-textify.wmcloud.org](https://wd-textify.wmcloud.org/)
+Live API: [wd-textify.wmcloud.org](https://wd-textify.wmcloud.org/) \
 API Docs: [wd-textify.wmcloud.org/docs](https://wd-textify.wmcloud.org/docs)
 
 ## Features
