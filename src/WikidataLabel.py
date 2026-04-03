@@ -39,7 +39,7 @@ Session = sessionmaker(bind=engine, expire_on_commit=False)
 
 
 class WikidataLabel(Base):
-    """Database-backed cache for multilingual Wikidata labels."""
+    """Database cache for multilingual Wikidata labels."""
 
     __tablename__ = 'labels'
     id = Column(String(64), primary_key=True)
@@ -58,7 +58,7 @@ class WikidataLabel(Base):
 
     @staticmethod
     def add_bulk_labels(data):
-        """Insert or update multiple label records in one transaction.
+        """Insert or update multiple label records.
 
         Args:
             data (list[dict]): Records containing at least ``id`` and ``labels`` keys.
