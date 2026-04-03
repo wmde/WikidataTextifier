@@ -74,26 +74,33 @@ async def get_textified_wd(
     qualifiers: bool = True,
     fallback_lang: str = 'en'
 ):
-    """Return normalized Wikidata entities in JSON, text, or triplet format.
+    """Retrieve Wikidata entities as structured JSON, natural text, or triplet lines.
 
-    Args:
-        request (Request): Incoming request object (currently unused).
-        background_tasks (BackgroundTasks): Background task queue for periodic cache cleanup.
-        id (str): Comma-separated entity IDs (for example, ``"Q42,Q2"``).
-        pid (str): Optional comma-separated property IDs used to filter claims.
-        lang (str): Preferred language code for labels and formatted values.
-        format (str): Output format: ``"json"``, ``"text"``, or ``"triplet"``.
-        external_ids (bool): Whether to include claims with the ``external-id`` datatype.
-        references (bool): Whether to include references in claim values.
-        all_ranks (bool): Whether to include all statement ranks (preferred, normal, deprecated).
-        qualifiers (bool): Whether to include qualifiers in claim values.
-        fallback_lang (str): Fallback language when ``lang`` is unavailable.
+    This endpoint fetches one or more entities, resolves missing labels, and normalizes
+    claims into a compact representation suitable for downstream LLM use.
 
-    Returns:
-        dict[str, object | None]: Mapping of requested QIDs to their normalized payloads.
+    **Args:**
 
-    Raises:
-        HTTPException: If an entity is not found, an upstream request fails, or internal processing fails.
+    - **id** (str): Comma-separated Wikidata IDs to fetch (for example: `"Q42"` or `"Q42,Q2"`).
+    - **pid** (str, optional): Comma-separated property IDs used to filter returned claims (for example: `"P31,P279"`).
+    - **lang** (str): Preferred language code for labels and formatted values.
+    - **format** (str): Output format. One of `"json"`, `"text"`, or `"triplet"`.
+    - **external_ids** (bool): If `true`, include claims with datatype `external-id`.
+    - **references** (bool): If `true`, include references in claim values (JSON output only).
+    - **all_ranks** (bool): If `true`, include preferred, normal, and deprecated statement ranks.
+    - **qualifiers** (bool): If `true`, include qualifiers for claim values.
+    - **fallback_lang** (str): Fallback language used when `lang` is unavailable.
+    - **request** (Request): FastAPI request context object.
+    - **background_tasks** (BackgroundTasks): Background task manager used for cache cleanup.
+
+    **Returns:**
+
+    A dictionary keyed by requested entity ID (for example, `"Q42"`).  
+    Each value depends on `format`:
+
+    - **json**: Structured entity payload with label, description, aliases, and claims.
+    - **text**: Human-readable summary text.
+    - **triplet**: Triplet-style text lines with labels and IDs.
     """
     try:
         filter_pids = []
