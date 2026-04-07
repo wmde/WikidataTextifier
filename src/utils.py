@@ -1,9 +1,11 @@
+"""HTTP helpers and value-formatting utilities for Wikidata APIs."""
+
+import html
+import json
+import os
+
 import requests
 from requests.adapters import HTTPAdapter
-
-import json
-import html
-import os
 
 REQUEST_TIMEOUT_SECONDS = float(os.environ.get("REQUEST_TIMEOUT_SECONDS", "15"))
 
@@ -12,25 +14,27 @@ adapter = HTTPAdapter(pool_connections=20, pool_maxsize=20)
 SESSION.mount("http://", adapter)
 SESSION.mount("https://", adapter)
 
+
 def get_wikidata_ttl_by_id(
-        id,
-        lang='en',
-    ):
-    """Fetches a Wikidata entity by its ID and returns its TTL representation.
+    id,
+    lang="en",
+):
+    """Fetch a Wikidata entity as TTL from ``Special:EntityData``.
 
     Args:
-        id (str): A Wikidata entity ID (e.g., Q42, P31).
-        lang (str, optional): The language to use for the response. Defaults to 'en'.
+        id (str): Wikidata entity ID, for example ``"Q42"`` or ``"P31"``.
+        lang (str, optional): Language code for server-side label rendering.
 
     Returns:
-        str: The TTL representation of the entity.
+        str: TTL document for the requested entity.
+
+    Raises:
+        requests.HTTPError: If Wikidata returns an error response.
     """
     params = {
-        'uselang': lang,
+        "uselang": lang,
     }
-    headers = {
-        'User-Agent': 'Wikidata Textifier (embeddings@wikimedia.de)'
-    }
+    headers = {"User-Agent": "Wikidata Textifier (embeddings@wikimedia.de)"}
 
     response = SESSION.get(
         f"https://www.wikidata.org/wiki/Special:EntityData/{id}.ttl",
@@ -42,23 +46,21 @@ def get_wikidata_ttl_by_id(
     return response.text
 
 
-def get_wikidata_json_by_ids(
-        ids,
-        props='labels|descriptions|aliases|claims'
-    ):
-    """
-    Fetches Wikidata entities by their IDs and returns a dictionary of entities.
+def get_wikidata_json_by_ids(ids, props="labels|descriptions|aliases|claims"):
+    """Fetch one or more Wikidata entities from ``wbgetentities``.
 
-    Parameters:
-    - ids (list[str] or str): A list of Wikidata entity IDs (e.g., Q42, P31) or a single ID as a string.
-    - props (str): The properties to retrieve (default is 'labels|descriptions|aliases|claims').
+    Args:
+        ids (list[str] | str): Entity IDs as a list or ``|``-separated string.
+        props (str): Pipe-delimited properties requested from the API.
 
     Returns:
-    - dict: A dictionary containing the entities, where keys are entity IDs and values are dictionaries of properties.
-    """
+        dict[str, dict]: Mapping of entity IDs to API entity payloads.
 
+    Raises:
+        requests.HTTPError: If Wikidata returns an error response.
+    """
     if isinstance(ids, str):
-        ids = ids.split('|')
+        ids = ids.split("|")
     ids = list(dict.fromkeys(ids))  # Ensure unique IDs
 
     entities_data = {}
@@ -66,18 +68,15 @@ def get_wikidata_json_by_ids(
     # Wikidata API has a limit on the number of IDs per request,
     # typically 50 for wbgetentities.
     for chunk_idx in range(0, len(ids), 50):
-
-        ids_chunk = ids[chunk_idx:chunk_idx+50]
+        ids_chunk = ids[chunk_idx : chunk_idx + 50]
         params = {
-            'action': 'wbgetentities',
-            'ids': "|".join(ids_chunk),
-            'props': props,
-            'format': 'json',
-            'origin': '*',
+            "action": "wbgetentities",
+            "ids": "|".join(ids_chunk),
+            "props": props,
+            "format": "json",
+            "origin": "*",
         }
-        headers = {
-            'User-Agent': 'Wikidata Textifier (embeddings@wikimedia.de)'
-        }
+        headers = {"User-Agent": "Wikidata Textifier (embeddings@wikimedia.de)"}
 
         response = SESSION.get(
             "https://www.wikidata.org/w/api.php?",
@@ -96,9 +95,20 @@ def get_wikidata_json_by_ids(
 # Formatting
 #####################################
 
+
 def wikidata_time_to_text(value: dict, lang: str = "en"):
-    """
-    Convert a Wikidata time value into natural language text.
+    """Format a time datavalue into localized display text using a local Wikibase instance.
+
+    Args:
+        value (dict): Time value payload in Wikibase datavalue format.
+        lang (str): Language code used by ``wbformatvalue``.
+
+    Returns:
+        str: Localized human-readable representation of the time value.
+
+    Raises:
+        ValueError: If the input payload is invalid or the API response is malformed.
+        requests.HTTPError: If the formatting API returns an error response.
     """
     WIKIBASE_HOST = os.environ.get("WIKIBASE_HOST", "wikibase")
     WIKIBASE_API = f"http://{WIKIBASE_HOST}/w/api.php"
@@ -123,12 +133,16 @@ def wikidata_time_to_text(value: dict, lang: str = "en"):
         },
     }
 
-    r = SESSION.post(WIKIBASE_API, data={
-        "action": "wbformatvalue",
-        "format": "json",
-        "uselang": lang,
-        "datavalue": json.dumps(datavalue),
-    }, timeout=REQUEST_TIMEOUT_SECONDS)
+    r = SESSION.post(
+        WIKIBASE_API,
+        data={
+            "action": "wbformatvalue",
+            "format": "json",
+            "uselang": lang,
+            "datavalue": json.dumps(datavalue),
+        },
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
     r.raise_for_status()
 
     data = r.json()
@@ -138,8 +152,18 @@ def wikidata_time_to_text(value: dict, lang: str = "en"):
 
 
 def wikidata_geolocation_to_text(value: dict, lang: str = "en"):
-    """
-    Convert a Wikidata geolocation value into natural language text.
+    """Format a globe-coordinate value into localized display text using a local Wikibase instance.
+
+    Args:
+        value (dict): Coordinate payload in Wikibase datavalue format.
+        lang (str): Language code used by ``wbformatvalue``.
+
+    Returns:
+        str: Localized human-readable representation of the coordinate value.
+
+    Raises:
+        ValueError: If the formatting API response is malformed.
+        requests.HTTPError: If the formatting API returns an error response.
     """
     WIKIBASE_HOST = os.environ.get("WIKIBASE_HOST", "wikibase")
     WIKIBASE_API = f"http://{WIKIBASE_HOST}/w/api.php"
@@ -155,12 +179,16 @@ def wikidata_geolocation_to_text(value: dict, lang: str = "en"):
         },
     }
 
-    r = SESSION.post(WIKIBASE_API, data={
-        "action": "wbformatvalue",
-        "format": "json",
-        "uselang": lang,
-        "datavalue": json.dumps(datavalue),
-    }, timeout=REQUEST_TIMEOUT_SECONDS)
+    r = SESSION.post(
+        WIKIBASE_API,
+        data={
+            "action": "wbformatvalue",
+            "format": "json",
+            "uselang": lang,
+            "datavalue": json.dumps(datavalue),
+        },
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
     r.raise_for_status()
 
     data = r.json()

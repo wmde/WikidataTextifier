@@ -1,1 +1,19 @@
-from .WikidataTextifier import WikidataEntity, WikidataClaim, WikidataClaimValue, WikidataCoordinates, WikidataTime, WikidataQuantity
+"""Public exports for textifier data structures."""
+
+from .WikidataTextifier import (
+    WikidataClaim,
+    WikidataClaimValue,
+    WikidataCoordinates,
+    WikidataEntity,
+    WikidataQuantity,
+    WikidataTime,
+)
+
+__all__ = [
+    "WikidataClaim",
+    "WikidataClaimValue",
+    "WikidataCoordinates",
+    "WikidataEntity",
+    "WikidataQuantity",
+    "WikidataTime",
+]

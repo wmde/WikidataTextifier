@@ -1,14 +1,16 @@
-from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi import BackgroundTasks
-import traceback
-import requests
-import time
-import os
+"""FastAPI application that exposes Wikidata textification endpoints."""
 
-from src.Normalizer import TTLNormalizer, JSONNormalizer
-from src.WikidataLabel import WikidataLabel, LazyLabelFactory
+import os
+import time
+import traceback
+
+import requests
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+
 from src import utils
+from src.Normalizer import JSONNormalizer, TTLNormalizer
+from src.WikidataLabel import LazyLabelFactory, WikidataLabel
 
 # Start Fastapi app
 app = FastAPI(
@@ -32,9 +34,12 @@ app.add_middleware(
 LABEL_CLEANUP_INTERVAL_SECONDS = int(os.environ.get("LABEL_CLEANUP_INTERVAL_SECONDS", 3600))
 _last_label_cleanup = 0.0
 
+
 @app.on_event("startup")
 async def startup():
+    """Initialize database resources required by the API."""
     WikidataLabel.initialize_database()
+
 
 @app.get(
     "/",
@@ -43,57 +48,67 @@ async def startup():
             "description": "Returns a list of relevant Wikidata property PIDs with similarity scores",
             "content": {
                 "application/json": {
-                    "example": [{
-                        "Q42": "Douglas Adams (human), English writer, humorist, and dramatist...",
-                    }]
+                    "example": [
+                        {
+                            "Q42": "Douglas Adams (human), English writer, humorist, and dramatist...",
+                        }
+                    ]
                 }
             },
         },
         422: {
             "description": "Missing or invalid query parameter",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Invalid format specified"}
-                }
-            },
+            "content": {"application/json": {"example": {"detail": "Invalid format specified"}}},
         },
     },
 )
 async def get_textified_wd(
-    request: Request, background_tasks: BackgroundTasks,
+    request: Request,
+    background_tasks: BackgroundTasks,
     id: str = Query(..., examples="Q42,Q2"),
     pid: str = Query(None, examples="P31,P279"),
-    lang: str = 'en',
-    format: str = 'json',
+    lang: str = "en",
+    format: str = "json",
     external_ids: bool = True,
     references: bool = False,
     all_ranks: bool = False,
     qualifiers: bool = True,
-    fallback_lang: str = 'en'
+    fallback_lang: str = "en",
 ):
-    """
-    Retrieve a Wikidata item with all labels or textual representations for an LLM.
+    """Retrieve Wikidata entities as structured JSON, natural text, or triplet lines.
 
-    Args:
-        id (str): The Wikidata item ID (e.g., "Q42").
-        pid (str): Comma-separated list of property IDs to filter claims (e.g., "P31,P279").
-        format (str): The format of the response, either 'json', 'text', or 'triplet'.
-        lang (str): The language code for labels (default is 'en').
-        external_ids (bool): If True, includes external IDs in the response.
-        all_ranks (bool): If True, includes statements of all ranks (preferred, normal, deprecated).
-        references (bool): If True, includes references in the response. (only available in JSON format)
-        qualifiers (bool): If True, includes qualifiers in the response.
-        fallback_lang (str): The fallback language code if the preferred language is not available.
+    This endpoint fetches one or more entities, resolves missing labels, and normalizes
+    claims into a compact representation suitable for downstream LLM use.
 
-    Returns:
-        list: A list of dictionaries containing QIDs and the similarity scores.
+    **Args:**
+
+    - **id** (str): Comma-separated Wikidata IDs to fetch (for example: `"Q42"` or `"Q42,Q2"`).
+    - **pid** (str, optional): Comma-separated property IDs used to filter returned claims (for example: `"P31,P279"`).
+    - **lang** (str): Preferred language code for labels and formatted values.
+    - **format** (str): Output format. One of `"json"`, `"text"`, or `"triplet"`.
+    - **external_ids** (bool): If `true`, include claims with datatype `external-id`.
+    - **references** (bool): If `true`, include references in claim values (JSON output only).
+    - **all_ranks** (bool): If `true`, include preferred, normal, and deprecated statement ranks.
+    - **qualifiers** (bool): If `true`, include qualifiers for claim values.
+    - **fallback_lang** (str): Fallback language used when `lang` is unavailable.
+    - **request** (Request): FastAPI request context object.
+    - **background_tasks** (BackgroundTasks): Background task manager used for cache cleanup.
+
+    **Returns:**
+
+    A dictionary keyed by requested entity ID (for example, `"Q42"`).
+    Each value depends on `format`:
+
+    - **json**: Structured entity payload with label, description, aliases, and claims.
+    - **text**: Human-readable summary text.
+    - **triplet**: Triplet-style text lines with labels and IDs.
     """
     try:
         filter_pids = []
         if pid:
-            filter_pids = [p.strip() for p in pid.split(',')]
+            filter_pids = [p.strip() for p in pid.split(",")]
 
-        qids = [q.strip() for q in id.split(',')]
+        qids = [q.strip() for q in id.split(",")]
         label_factory = LazyLabelFactory(lang=lang, fallback_lang=fallback_lang)
 
         entities = {}
@@ -144,7 +159,9 @@ async def get_textified_wd(
                     fallback_lang=fallback_lang,
                     label_factory=label_factory,
                     debug=False,
-                ) if entity_data.get(qid) else None
+                )
+                if entity_data.get(qid)
+                else None
                 for qid in qids
             }
 
@@ -154,8 +171,10 @@ async def get_textified_wd(
                     all_ranks=all_ranks,
                     references=references,
                     filter_pids=filter_pids,
-                    qualifiers=qualifiers
-                ) if entity else None
+                    qualifiers=qualifiers,
+                )
+                if entity
+                else None
                 for qid, entity in entity_data.items()
             }
 
@@ -165,9 +184,9 @@ async def get_textified_wd(
                 return_data[qid] = None
                 continue
 
-            if format == 'text':
+            if format == "text":
                 results = entity.to_text(lang)
-            elif format == 'triplet':
+            elif format == "triplet":
                 results = entity.to_triplet()
             else:
                 results = entity.to_json()
