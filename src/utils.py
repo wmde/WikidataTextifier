@@ -8,6 +8,7 @@ import requests
 from requests.adapters import HTTPAdapter
 
 REQUEST_TIMEOUT_SECONDS = float(os.environ.get("REQUEST_TIMEOUT_SECONDS", "15"))
+USER_AGENT = os.environ.get("USER_AGENT", "Wikidata Textifier (embeddings@wikimedia.de)")
 
 SESSION = requests.Session()
 adapter = HTTPAdapter(pool_connections=20, pool_maxsize=20)
@@ -36,7 +37,7 @@ def get_wikidata_ttl_by_id(
     params = {
         "uselang": lang,
     }
-    headers = {"User-Agent": "Wikidata Textifier (embeddings@wikimedia.de)"}
+    headers = {"User-Agent": USER_AGENT}
 
     response = SESSION.get(
         f"{wb_url}/wiki/Special:EntityData/{id}.ttl",
@@ -78,7 +79,7 @@ def get_wikidata_json_by_ids(ids, wb_url="https://www.wikidata.org", props="labe
             "format": "json",
             "origin": "*",
         }
-        headers = {"User-Agent": "Wikidata Textifier (embeddings@wikimedia.de)"}
+        headers = {"User-Agent": USER_AGENT}
 
         response = SESSION.get(
             f"{wb_url}/w/api.php?",
