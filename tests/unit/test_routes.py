@@ -9,16 +9,20 @@ import main
 from src.Textifier.WikidataTextifier import WikidataEntity
 
 
-def test_get_textified_wd_uses_ttl_normalizer_for_single_qid(monkeypatch, run_async, make_request):
-    """Validate ``TTLNormalizer`` is used when one QID is requested."""
+def test_get_textified_wd_uses_json_normalizer_for_single_qid(monkeypatch, run_async, make_request):
+    """Validate ``JSONNormalizer`` is used for single-QID requests."""
     calls = {}
 
-    def fake_get_ttl(qid, lang="en"):
-        calls["requested_qid"] = qid
-        return "ttl-data"
+    def fake_get_json(ids, wb_url="https://www.wikidata.org", props="labels|descriptions|aliases|claims"):
+        calls["requested_ids"] = ids
+        calls["wb_url"] = wb_url
+        calls["props"] = props
+        return {
+            "Q42": {"labels": {"en": {"value": "Douglas Adams"}}, "descriptions": {}, "aliases": {}, "claims": {}},
+        }
 
-    class DummyTTLNormalizer:
-        """Minimal TTL normalizer stand-in for unit testing."""
+    class DummyJSONNormalizer:
+        """Minimal JSON normalizer stand-in for unit testing."""
 
         def __init__(self, **kwargs):
             self.entity_id = kwargs["entity_id"]
@@ -27,8 +31,8 @@ def test_get_textified_wd_uses_ttl_normalizer_for_single_qid(monkeypatch, run_as
         def normalize(self, **kwargs):
             return WikidataEntity(id=self.entity_id, label="Douglas Adams", claims=[])
 
-    monkeypatch.setattr(main.utils, "get_wikidata_ttl_by_id", fake_get_ttl)
-    monkeypatch.setattr(main, "TTLNormalizer", DummyTTLNormalizer)
+    monkeypatch.setattr(main.utils, "get_wikidata_json_by_ids", fake_get_json)
+    monkeypatch.setattr(main, "JSONNormalizer", DummyJSONNormalizer)
 
     result = run_async(
         main.get_textified_wd(
@@ -37,10 +41,12 @@ def test_get_textified_wd_uses_ttl_normalizer_for_single_qid(monkeypatch, run_as
             id="Q42",
             pid=None,
             format="json",
+            wb_url="https://example.wikibase.local",
         )
     )
 
-    assert calls["requested_qid"] == "Q42"
+    assert calls["requested_ids"] == ["Q42"]
+    assert calls["wb_url"] == "https://example.wikibase.local"
     assert calls["normalizer_entity_id"] == "Q42"
     assert result["Q42"]["QID"] == "Q42"
     assert result["Q42"]["label"] == "Douglas Adams"
@@ -50,7 +56,8 @@ def test_get_textified_wd_uses_json_normalizer_for_multiple_qids(monkeypatch, ru
     """Validate ``JSONNormalizer`` is used for multi-QID requests."""
     init_calls = []
 
-    def fake_get_json(ids):
+    def fake_get_json(ids, wb_url="https://www.wikidata.org", props="labels|descriptions|aliases|claims"):
+        del wb_url, props
         return {
             "Q1": {"labels": {"en": {"value": "One"}}, "descriptions": {}, "aliases": {}, "claims": {}},
             "Q2": {"labels": {"en": {"value": "Two"}}, "descriptions": {}, "aliases": {}, "claims": {}},

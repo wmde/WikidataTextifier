@@ -1,4 +1,4 @@
-"""Label cache and lazy label resolution for Wikidata entities."""
+"""Label cache and lazy label resolution for Wikibase entities."""
 
 import json
 import os
@@ -20,6 +20,7 @@ LABEL_UNLIMITED = os.environ.get("LABEL_UNLIMITED", "false") == "true"
 LABEL_TTL_DAYS = int(os.environ.get("LABEL_TTL_DAYS", "90"))
 LABEL_MAX_ROWS = int(os.environ.get("LABEL_MAX_ROWS", "10000000"))
 REQUEST_TIMEOUT_SECONDS = float(os.environ.get("REQUEST_TIMEOUT_SECONDS", "15"))
+DEFAULT_WIKIBASE_URL = "https://www.wikidata.org"
 
 DATABASE_URL = f"mariadb+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 
@@ -36,10 +37,11 @@ Session = sessionmaker(bind=engine, expire_on_commit=False)
 
 
 class WikidataLabel(Base):
-    """Database cache for multilingual Wikidata labels."""
+    """Database cache for multilingual Wikibase labels."""
 
     __tablename__ = "labels"
     id = Column(String(64), primary_key=True)
+    wikibase_url = Column(String(255), primary_key=True, default=DEFAULT_WIKIBASE_URL)
     labels = Column(JSON, default=dict)
     date_added = Column(DateTime, default=datetime.now, index=True)
 
@@ -48,17 +50,74 @@ class WikidataLabel(Base):
         """Create tables if they do not already exist."""
         try:
             Base.metadata.create_all(engine)
+            WikidataLabel._migrate_labels_table_for_wikibase()
             return True
         except Exception as e:
             print(f"Error while initializing labels database: {e}")
             return False
 
     @staticmethod
-    def add_bulk_labels(data):
+    def _migrate_labels_table_for_wikibase():
+        """Ensure the labels table supports cache partitioning per Wikibase."""
+        with engine.begin() as connection:
+            has_wikibase_url = connection.execute(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = :schema_name
+                      AND TABLE_NAME = 'labels'
+                      AND COLUMN_NAME = 'wikibase_url'
+                    """
+                ),
+                {"schema_name": DB_NAME},
+            ).scalar()
+
+            if not has_wikibase_url:
+                connection.execute(
+                    text(
+                        f"""
+                        ALTER TABLE labels
+                        ADD COLUMN wikibase_url VARCHAR(255) NOT NULL DEFAULT '{DEFAULT_WIKIBASE_URL}'
+                        """
+                    )
+                )
+
+            primary_key_cols = [
+                row[0]
+                for row in connection.execute(
+                    text(
+                        """
+                        SELECT COLUMN_NAME
+                        FROM information_schema.KEY_COLUMN_USAGE
+                        WHERE TABLE_SCHEMA = :schema_name
+                          AND TABLE_NAME = 'labels'
+                          AND CONSTRAINT_NAME = 'PRIMARY'
+                        ORDER BY ORDINAL_POSITION
+                        """
+                    ),
+                    {"schema_name": DB_NAME},
+                ).fetchall()
+            ]
+
+            if primary_key_cols == ["id"]:
+                connection.execute(
+                    text(
+                        """
+                        ALTER TABLE labels
+                        DROP PRIMARY KEY,
+                        ADD PRIMARY KEY (id, wikibase_url)
+                        """
+                    )
+                )
+
+    @staticmethod
+    def add_bulk_labels(data, wb_url: str = DEFAULT_WIKIBASE_URL):
         """Insert or update multiple label records.
 
         Args:
             data (list[dict]): Records containing at least ``id`` and ``labels`` keys.
+            wb_url (str): Wikibase URL used as cache partition key.
 
         Returns:
             bool: ``True`` when the operation succeeds, otherwise ``False``.
@@ -66,22 +125,34 @@ class WikidataLabel(Base):
         if not data:
             return True
 
-        for i in range(len(data)):
-            data[i]["date_added"] = datetime.now()
-            if isinstance(data[i].get("labels"), dict):
-                data[i]["labels"] = json.dumps(data[i]["labels"], ensure_ascii=False, separators=(",", ":"))
+        normalized_wb_url = WikidataLabel._normalize_wb_url(wb_url)
+        rows = []
+        for row in data:
+            normalized_row = {
+                "id": row["id"],
+                "wikibase_url": WikidataLabel._normalize_wb_url(row.get("wikibase_url", normalized_wb_url)),
+                "labels": row.get("labels", {}),
+                "date_added": datetime.now(),
+            }
+            if isinstance(normalized_row["labels"], dict):
+                normalized_row["labels"] = json.dumps(
+                    normalized_row["labels"],
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+            rows.append(normalized_row)
 
         with Session() as session:
             try:
                 session.execute(
                     text("""
-                    INSERT INTO labels (id, labels, date_added)
-                    VALUES (:id, :labels, :date_added)
+                    INSERT INTO labels (id, wikibase_url, labels, date_added)
+                    VALUES (:id, :wikibase_url, :labels, :date_added)
                     ON DUPLICATE KEY UPDATE
                     labels = VALUES(labels),
                     date_added = VALUES(date_added)
                 """),
-                    data,
+                    rows,
                 )
 
                 session.commit()
@@ -92,19 +163,24 @@ class WikidataLabel(Base):
                 return False
 
     @staticmethod
-    def add_label(id, labels):
+    def add_label(id, labels, wb_url: str = DEFAULT_WIKIBASE_URL):
         """Insert or update labels for a single entity.
 
         Args:
             id (str): Entity ID.
             labels (dict): Mapping of language code to label text.
+            wb_url (str): Wikibase URL used as cache partition key.
 
         Returns:
             bool: ``True`` when the operation succeeds, otherwise ``False``.
         """
         with Session() as session:
             try:
-                new_entry = WikidataLabel(id=id, labels=labels)
+                new_entry = WikidataLabel(
+                    id=id,
+                    wikibase_url=WikidataLabel._normalize_wb_url(wb_url),
+                    labels=labels,
+                )
                 session.add(new_entry)
                 session.commit()
                 return True
@@ -114,22 +190,28 @@ class WikidataLabel(Base):
                 return False
 
     @staticmethod
-    def get_labels(id):
+    def get_labels(id, wb_url: str = DEFAULT_WIKIBASE_URL):
         """Retrieve cached labels for one entity, with API fallback.
 
         Args:
             id (str): Entity ID.
+            wb_url (str): Wikibase URL used as cache partition key.
 
         Returns:
             dict | None: Cached or fetched labels for the entity, if available.
         """
+        normalized_wb_url = WikidataLabel._normalize_wb_url(wb_url)
         try:
             with Session() as session:
                 # Get labels that are less than LABEL_TTL_DAYS old
                 date_limit = datetime.now() - timedelta(days=LABEL_TTL_DAYS)
                 item = (
                     session.query(WikidataLabel)
-                    .filter(WikidataLabel.id == id, WikidataLabel.date_added >= date_limit)
+                    .filter(
+                        WikidataLabel.id == id,
+                        WikidataLabel.wikibase_url == normalized_wb_url,
+                        WikidataLabel.date_added >= date_limit,
+                    )
                     .first()
                 )
 
@@ -138,18 +220,19 @@ class WikidataLabel(Base):
         except Exception as e:
             print(f"Error while fetching cached label {id}: {e}")
 
-        labels = WikidataLabel._get_labels_wdapi(id).get(id)
+        labels = WikidataLabel._get_labels_wdapi(id, wb_url=normalized_wb_url).get(id)
         if labels:
-            WikidataLabel.add_label(id, labels)
+            WikidataLabel.add_label(id, labels, wb_url=normalized_wb_url)
 
         return labels
 
     @staticmethod
-    def get_bulk_labels(ids):
+    def get_bulk_labels(ids, wb_url: str = DEFAULT_WIKIBASE_URL):
         """Retrieve cached labels for multiple entities, with API fallback.
 
         Args:
             ids (list[str]): Entity IDs to fetch.
+            wb_url (str): Wikibase URL used as cache partition key.
 
         Returns:
             dict[str, dict]: Mapping of each requested ID to its labels.
@@ -157,6 +240,7 @@ class WikidataLabel(Base):
         if not ids:
             return {}
 
+        normalized_wb_url = WikidataLabel._normalize_wb_url(wb_url)
         labels = {}
         try:
             with Session() as session:
@@ -164,7 +248,11 @@ class WikidataLabel(Base):
                 date_limit = datetime.now() - timedelta(days=LABEL_TTL_DAYS)
                 rows = (
                     session.query(WikidataLabel.id, WikidataLabel.labels)
-                    .filter(WikidataLabel.id.in_(ids), WikidataLabel.date_added >= date_limit)
+                    .filter(
+                        WikidataLabel.id.in_(ids),
+                        WikidataLabel.wikibase_url == normalized_wb_url,
+                        WikidataLabel.date_added >= date_limit,
+                    )
                     .all()
                 )
                 labels = {id: labels for id, labels in rows}
@@ -174,12 +262,13 @@ class WikidataLabel(Base):
         # Fallback when labels are missing from the database
         missing_ids = set(ids) - set(labels.keys())
         if missing_ids:
-            missing_labels = WikidataLabel._get_labels_wdapi(missing_ids)
+            missing_labels = WikidataLabel._get_labels_wdapi(missing_ids, wb_url=normalized_wb_url)
             labels.update(missing_labels)
 
             # Cache labels
             WikidataLabel.add_bulk_labels(
-                [{"id": entity_id, "labels": entity_labels} for entity_id, entity_labels in missing_labels.items()]
+                [{"id": entity_id, "labels": entity_labels} for entity_id, entity_labels in missing_labels.items()],
+                wb_url=normalized_wb_url,
             )
 
         return labels
@@ -214,11 +303,13 @@ class WikidataLabel(Base):
                             DELETE l
                             FROM labels AS l
                             JOIN (
-                                SELECT id
+                                SELECT id, wikibase_url
                                 FROM labels
                                 ORDER BY date_added ASC
                                 LIMIT :rows_to_delete
-                            ) AS old_labels ON l.id = old_labels.id
+                            ) AS old_labels
+                              ON l.id = old_labels.id
+                             AND l.wikibase_url = old_labels.wikibase_url
                         """),
                         {"rows_to_delete": rows_to_delete},
                     )
@@ -232,16 +323,17 @@ class WikidataLabel(Base):
                 return False
 
     @staticmethod
-    def _get_labels_wdapi(ids):
-        """Retrieve labels from the Wikidata API.
+    def _get_labels_wdapi(ids, wb_url: str = DEFAULT_WIKIBASE_URL):
+        """Retrieve labels from the Wikibase Action API.
 
         Args:
             ids (list[str] | str): IDs as a list or ``|``-separated string.
+            wb_url (str): Wikibase URL to query.
 
         Returns:
             dict[str, dict]: Mapping of each ID to compressed labels.
         """
-        entities_data = get_wikidata_json_by_ids(ids, props="labels")
+        entities_data = get_wikidata_json_by_ids(ids, wb_url=wb_url, props="labels")
         entities_data = WikidataLabel._compress_labels(entities_data)
         return entities_data
 
@@ -262,6 +354,12 @@ class WikidataLabel(Base):
             else:
                 new_labels[qid] = {}
         return new_labels
+
+    @staticmethod
+    def _normalize_wb_url(wb_url: str) -> str:
+        """Normalize a Wikibase URL for stable cache keys."""
+        normalized = (wb_url or DEFAULT_WIKIBASE_URL).strip().rstrip("/")
+        return normalized or DEFAULT_WIKIBASE_URL
 
     @staticmethod
     def get_lang_val(data, lang="en", fallback_lang=None):
@@ -339,17 +437,19 @@ class LazyLabel:
 
 
 class LazyLabelFactory:
-    """Create and batch-resolve lazy Wikidata labels."""
+    """Create and batch-resolve lazy Wikibase labels."""
 
-    def __init__(self, lang="en", fallback_lang="en"):
+    def __init__(self, lang="en", fallback_lang="en", wb_url: str = DEFAULT_WIKIBASE_URL):
         """Initialize a lazy label factory.
 
         Args:
             lang (str): Preferred language code.
             fallback_lang (str): Fallback language code.
+            wb_url (str): Wikibase URL used for label lookups.
         """
         self.lang = lang
         self.fallback_lang = fallback_lang
+        self.wb_url = WikidataLabel._normalize_wb_url(wb_url)
         self._pending_ids = set()
         self._resolved_labels = {}
 
@@ -371,7 +471,7 @@ class LazyLabelFactory:
             return
 
         self._pending_ids = self._pending_ids - set(self._resolved_labels.keys())
-        label_data = WikidataLabel.get_bulk_labels(list(self._pending_ids))
+        label_data = WikidataLabel.get_bulk_labels(list(self._pending_ids), wb_url=self.wb_url)
         self._resolved_labels.update(label_data)
         self._pending_ids.clear()
 

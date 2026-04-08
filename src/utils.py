@@ -17,12 +17,14 @@ SESSION.mount("https://", adapter)
 
 def get_wikidata_ttl_by_id(
     id,
+    wb_url="https://www.wikidata.org",
     lang="en",
 ):
     """Fetch a Wikidata entity as TTL from ``Special:EntityData``.
 
     Args:
         id (str): Wikidata entity ID, for example ``"Q42"`` or ``"P31"``.
+        wb_url (str): The Wikibase URL (default is Wikidata 'https://www.wikidata.org').
         lang (str, optional): Language code for server-side label rendering.
 
     Returns:
@@ -37,7 +39,7 @@ def get_wikidata_ttl_by_id(
     headers = {"User-Agent": "Wikidata Textifier (embeddings@wikimedia.de)"}
 
     response = SESSION.get(
-        f"https://www.wikidata.org/wiki/Special:EntityData/{id}.ttl",
+        f"{wb_url}/wiki/Special:EntityData/{id}.ttl",
         params=params,
         headers=headers,
         timeout=REQUEST_TIMEOUT_SECONDS,
@@ -46,11 +48,12 @@ def get_wikidata_ttl_by_id(
     return response.text
 
 
-def get_wikidata_json_by_ids(ids, props="labels|descriptions|aliases|claims"):
+def get_wikidata_json_by_ids(ids, wb_url="https://www.wikidata.org", props="labels|descriptions|aliases|claims"):
     """Fetch one or more Wikidata entities from ``wbgetentities``.
 
     Args:
         ids (list[str] | str): Entity IDs as a list or ``|``-separated string.
+        wb_url (str): The Wikibase URL (default is Wikidata 'https://www.wikidata.org').
         props (str): Pipe-delimited properties requested from the API.
 
     Returns:
@@ -79,7 +82,7 @@ def get_wikidata_json_by_ids(ids, props="labels|descriptions|aliases|claims"):
         headers = {"User-Agent": "Wikidata Textifier (embeddings@wikimedia.de)"}
 
         response = SESSION.get(
-            "https://www.wikidata.org/w/api.php?",
+            f"{wb_url}/w/api.php?",
             params=params,
             headers=headers,
             timeout=REQUEST_TIMEOUT_SECONDS,
@@ -129,7 +132,7 @@ def wikidata_time_to_text(value: dict, lang: str = "en"):
             "before": value.get("before", 0),
             "after": value.get("after", 0),
             "precision": value.get("precision", 10),
-            "calendarmodel": value.get("calendarmodel", "Q1985786"),
+            "calendarmodel": value.get("calendarmodel", "Q12138"),
         },
     }
 
