@@ -1,4 +1,4 @@
-"""FastAPI application that exposes Wikidata textification endpoints."""
+"""FastAPI application that exposes Wikidata/Wikibase textification endpoints."""
 
 import os
 import time
@@ -45,7 +45,7 @@ async def startup():
     "/",
     responses={
         200: {
-            "description": "Returns a list of relevant Wikidata property PIDs with similarity scores",
+            "description": "Returns textified entities keyed by requested IDs",
             "content": {
                 "application/json": {
                     "example": [
@@ -76,14 +76,14 @@ async def get_textified_wd(
     fallback_lang: str = "en",
     wb_url: str = "https://www.wikidata.org",
 ):
-    """Retrieve Wikidata entities as structured JSON, natural text, or triplet lines.
+    """Retrieve entities as structured JSON, natural text, or triplet lines.
 
     This endpoint fetches one or more entities, resolves missing labels, and normalizes
     claims into a compact representation suitable for downstream LLM use.
 
     **Args:**
 
-    - **id** (str): Comma-separated Wikidata IDs to fetch (for example: `"Q42"` or `"Q42,Q2"`).
+    - **id** (str): Comma-separated entity IDs to fetch (for example: `"Q42"` or `"Q42,Q2"`).
     - **pid** (str, optional): Comma-separated property IDs used to filter returned claims (for example: `"P31,P279"`).
     - **lang** (str): Preferred language code for labels and formatted values.
     - **format** (str): Output format. One of `"json"`, `"text"`, or `"triplet"`.
@@ -92,7 +92,7 @@ async def get_textified_wd(
     - **all_ranks** (bool): If `true`, include preferred, normal, and deprecated statement ranks.
     - **qualifiers** (bool): If `true`, include qualifiers for claim values.
     - **fallback_lang** (str): Fallback language used when `lang` is unavailable.
-    - **wb_url** (str): The Wikibase URL (default is Wikidata 'https://www.wikidata.org').
+    - **wb_url** (str): Wikibase base URL (default: `https://www.wikidata.org`).
 
     **Returns:**
 

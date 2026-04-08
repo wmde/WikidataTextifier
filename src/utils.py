@@ -1,4 +1,4 @@
-"""HTTP helpers and value-formatting utilities for Wikidata APIs."""
+"""HTTP helpers and value-formatting utilities for Wikidata/Wikibase APIs."""
 
 import html
 import json
@@ -20,18 +20,18 @@ def get_wikidata_ttl_by_id(
     wb_url="https://www.wikidata.org",
     lang="en",
 ):
-    """Fetch a Wikidata entity as TTL from ``Special:EntityData``.
+    """Fetch an entity as TTL from ``Special:EntityData``.
 
     Args:
-        id (str): Wikidata entity ID, for example ``"Q42"`` or ``"P31"``.
-        wb_url (str): The Wikibase URL (default is Wikidata 'https://www.wikidata.org').
+        id (str): Entity ID, for example ``"Q42"`` or ``"P31"``.
+        wb_url (str): Wikibase base URL (default is Wikidata ``https://www.wikidata.org``).
         lang (str, optional): Language code for server-side label rendering.
 
     Returns:
         str: TTL document for the requested entity.
 
     Raises:
-        requests.HTTPError: If Wikidata returns an error response.
+        requests.HTTPError: If the upstream Wikibase returns an error response.
     """
     params = {
         "uselang": lang,
@@ -49,18 +49,18 @@ def get_wikidata_ttl_by_id(
 
 
 def get_wikidata_json_by_ids(ids, wb_url="https://www.wikidata.org", props="labels|descriptions|aliases|claims"):
-    """Fetch one or more Wikidata entities from ``wbgetentities``.
+    """Fetch one or more entities from ``wbgetentities``.
 
     Args:
         ids (list[str] | str): Entity IDs as a list or ``|``-separated string.
-        wb_url (str): The Wikibase URL (default is Wikidata 'https://www.wikidata.org').
+        wb_url (str): Wikibase base URL (default is Wikidata ``https://www.wikidata.org``).
         props (str): Pipe-delimited properties requested from the API.
 
     Returns:
         dict[str, dict]: Mapping of entity IDs to API entity payloads.
 
     Raises:
-        requests.HTTPError: If Wikidata returns an error response.
+        requests.HTTPError: If the upstream Wikibase returns an error response.
     """
     if isinstance(ids, str):
         ids = ids.split("|")
@@ -68,8 +68,7 @@ def get_wikidata_json_by_ids(ids, wb_url="https://www.wikidata.org", props="labe
 
     entities_data = {}
 
-    # Wikidata API has a limit on the number of IDs per request,
-    # typically 50 for wbgetentities.
+    # wbgetentities has a limit on number of IDs per request (typically 50).
     for chunk_idx in range(0, len(ids), 50):
         ids_chunk = ids[chunk_idx : chunk_idx + 50]
         params = {

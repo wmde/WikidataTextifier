@@ -342,7 +342,7 @@ class WikidataLabel(Base):
         """Compress API labels by extracting each language's ``value`` field.
 
         Args:
-            data (dict): Raw entities payload from the Wikidata API.
+            data (dict): Raw entities payload from the Wikibase Action API.
 
         Returns:
             dict[str, dict]: Mapping of entity ID to ``{lang: label}``.
