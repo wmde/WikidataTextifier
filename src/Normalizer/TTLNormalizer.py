@@ -14,6 +14,7 @@ from ..Textifier.WikidataTextifier import (
     WikidataClaimValue,
     WikidataCoordinates,
     WikidataEntity,
+    WikidataMonolingualText,
     WikidataQuantity,
     WikidataText,
     WikidataTime,
@@ -477,9 +478,8 @@ class TTLNormalizer:
 
         # monolingualtext objects are represented as dicts in your parsing layer
         if isinstance(parsed, dict) and "text" in parsed:
-            if parsed.get("language") != self.lang:
-                return WikidataText(text=None)
-            return WikidataText(text=parsed.get("text"))
+            lang = parsed.get("language")
+            return WikidataMonolingualText(text=parsed.get("text"), lang=lang)
 
         return WikidataText(text=str(parsed))
 

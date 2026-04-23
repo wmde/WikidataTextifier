@@ -11,6 +11,7 @@ from ..Textifier.WikidataTextifier import (
     WikidataClaimValue,
     WikidataCoordinates,
     WikidataEntity,
+    WikidataMonolingualText,
     WikidataQuantity,
     WikidataText,
     WikidataTime,
@@ -422,9 +423,7 @@ class JSONNormalizer:
                 return None
             txt = dv_val.get("text")
             lg = dv_val.get("language")
-            if lg != self.lang:
-                return WikidataText(text=None)
-            return WikidataText(text=str(txt) if txt is not None else "")
+            return WikidataMonolingualText(text=str(txt) if txt is not None else "", lang=lg)
 
         # Default string-like
         return WikidataText(text=str(dv_val) if dv_val is not None else None)
