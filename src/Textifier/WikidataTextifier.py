@@ -36,6 +36,29 @@ class WikidataText:
 
 
 @dataclass(slots=True)
+class WikidataMonolingualText:
+    """Object for Wikidata monolingual text values."""
+
+    text: Optional[str] = None
+    lang: Optional[str] = None
+
+    def __str__(self) -> str:
+        """Return the text representation."""
+        return self.lang + ":" + self.text if self.lang and self.text else self.text or ""
+
+    def __bool__(self) -> bool:
+        """Return whether this text wrapper contains content."""
+        return bool(self.text)
+
+    def to_json(self) -> Optional[str]:
+        """Serialize to a JSON object."""
+        return {
+            "text": self.text,
+            "lang": self.lang
+        }
+
+
+@dataclass(slots=True)
 class WikidataCoordinates:
     """Object for Wikidata coordinate values."""
 
@@ -45,12 +68,15 @@ class WikidataCoordinates:
 
     def __str__(self) -> str:
         """Return a readable coordinate string."""
-        return self.string_val or ""
+        return self.string_val or "lat: {}, lon: {}".format(self.latitude, self.longitude)
 
     def __bool__(self) -> bool:
         """Return whether both latitude and longitude are present."""
         # coordinates are meaningful if we have both lat/lon
-        return self.latitude is not None and self.longitude is not None
+        return (
+            self.latitude is not None
+            and self.longitude is not None
+        )
 
     def to_json(self) -> Dict[str, Any]:
         """Serialize coordinates to a JSON object."""
@@ -72,7 +98,7 @@ class WikidataTime:
 
     def __str__(self) -> str:
         """Return a readable time string."""
-        return self.string_val or ""
+        return self.string_val or str(self.time)
 
     def __bool__(self) -> bool:
         """Return whether this instance contains a time value."""
@@ -138,13 +164,17 @@ class WikidataEntity:
 
     def __bool__(self) -> bool:
         """Return whether this entity has a usable id and label."""
-        return bool(self.id) and self.label is not None and str(self.label) != ""
+        return (
+            bool(self.id)
+            and self.label is not None
+            and str(self.label) != ""
+        )
 
-    def to_text(self, lang="en", keep_empty: bool = False) -> str:
+    def to_text(self, lang="en") -> str:
         """Render the entity into a readable text."""
         lang_var = LANGUAGE_VARIABLES.get(lang, LANGUAGE_VARIABLES.get("en"))
 
-        label_str = str(self.label) if self.label else "<missing>"
+        label_str = str(self.label) if self.label else "<no label>"
         string = label_str
 
         if self.description:
@@ -153,7 +183,9 @@ class WikidataEntity:
             string += f"{lang_var[', ']}{lang_var['also known as']}"
             string += f" {lang_var[', '].join(map(str, self.aliases))}"
 
-        attributes = [c.to_text(lang) for c in self.claims if keep_empty or c]
+        attributes = [c.to_text(lang) for c in self.claims]
+        attributes= [a for a in attributes if a]  # filter out empty attributes
+
         if len(attributes) > 0:
             attributes = "\n- ".join(attributes)
             string += f". {lang_var['Attributes include']}:\n- {attributes}"
@@ -168,9 +200,9 @@ class WikidataEntity:
         return {
             id_key: self.id,
             "label": str(self.label) if self.label else None,
-            "description": self.description,
+            "description": self.description if self.description else None,
             "aliases": self.aliases,
-            "claims": [c.to_json() for c in self.claims if c],
+            "claims": [c.to_json() for c in self.claims],
         }
 
     def to_triplet(self) -> str:
@@ -181,12 +213,15 @@ class WikidataEntity:
             lines.append(f"description: {self.description}")
         if self.aliases:
             lines.append(f"aliases: {', '.join(map(str, self.aliases))}")
-        lines.extend([c.to_triplet() for c in self.claims if c])
+
+        claims = [c.to_triplet() for c in self.claims]
+        claims = [c for c in claims if c]  # filter out empty claims
+        lines.extend(claims)
 
         if not lines:
             return head
 
-        exploded: List[str] = "\n".join(lines).split("\n")
+        exploded = "\n".join(lines).split("\n")
         return "\n".join(f"{head}: {line}" for line in exploded)
 
 
@@ -202,9 +237,7 @@ class WikidataClaim:
     def __bool__(self) -> bool:
         """Return whether this claim contains a value."""
         return (
-            self.property is not None
-            and str(self.property.label) != ""
-            and len(self.values) > 0
+            bool(self.property)
             and any(bool(v) for v in self.values)
         )
 
@@ -212,31 +245,44 @@ class WikidataClaim:
         """Render the claim into a readable text."""
         lang_var = LANGUAGE_VARIABLES.get(lang, LANGUAGE_VARIABLES.get("en"))
 
-        if self.values:
+        # For text format, remove claims with missing property label
+        # TODO: Consider replacing missing label with <no label> instead of removing the claim entirely.
+        if not bool(self.property):
+            return ""
+
+        if any(bool(v) for v in self.values):
             values = lang_var[", "].join(v.to_text(lang) for v in self.values if v)
             return f"{str(self.property.label)}: {values}"
 
+        # if no values, show existence of the property.
         return f"{lang_var['has']} {str(self.property.label)}"
 
     def to_json(self) -> Dict[str, Any]:
         """Serialize the claim to a JSON object."""
         prop_json = self.property.to_json()
         prop_id = prop_json.get("PID") or prop_json.get("QID")
+
+        values = [v.to_json() for v in self.values]
+        values = [v for v in values if v]  # filter out empty values
+
         return {
             "PID": prop_id,
             "property_label": prop_json["label"],
             "datatype": self.datatype,
-            "values": [v.to_json() for v in self.values if v],
+            "values": values,
         }
 
     def to_triplet(self, as_qualifier: bool = False) -> str:
         """Render the claim as triplet text."""
-        if not self:
-            return ""
+        prop_label = str(self.property.label) if bool(self.property) else "<no label>"
 
-        label = f"{str(self.property.label)} ({self.property.id})"
-        value_lines = [v.to_triplet() for v in self.values if v]
+        # For triplet format, keep claims with missing property label
+        label = f"{prop_label} ({self.property.id})"
 
+        value_lines = [v.to_triplet() for v in self.values]
+        value_lines = [v for v in value_lines if v]  # filter out empty values
+
+        # Remove claims with missing values
         if not value_lines:
             return ""
 
@@ -253,19 +299,24 @@ class WikidataClaimValue:
     """Object for Wikidata claim values."""
 
     claim: WikidataClaim
-    value: Optional[Union[WikidataEntity, WikidataQuantity, WikidataTime, WikidataCoordinates, WikidataText]] = None
+    value: Optional[
+        Union[
+            WikidataEntity, WikidataQuantity, WikidataTime, WikidataCoordinates, WikidataText, WikidataMonolingualText
+            ]
+        ] = None
     qualifiers: List[WikidataClaim] = field(default_factory=list)
     references: List[List[WikidataClaim]] = field(default_factory=list)
     rank: Optional[str] = None  # preferred|normal|deprecated
 
     def __bool__(self) -> bool:
         """Return whether this claim value has non-empty values."""
-        return self.value is not None and str(self.value) != ""
+        return bool(self.value)
 
     def to_text(self, lang="en") -> str:
         """Render the value and qualifiers as readable text."""
         lang_var = LANGUAGE_VARIABLES.get(lang, LANGUAGE_VARIABLES.get("en"))
 
+        # TODO: Consider showing qualifiers even if the main value is missing
         if not self:
             return ""
 
@@ -277,7 +328,8 @@ class WikidataClaimValue:
         if self.rank == "deprecated":
             s += " [deprecated]"
 
-        qs = [q.to_text(lang) for q in self.qualifiers if q]
+        qs = [q.to_text(lang) for q in self.qualifiers]
+        qs = [q for q in qs if q]  # filter out empty qualifiers
         if qs:
             s += f" ({lang_var[', '].join(qs)})"
 
@@ -285,16 +337,12 @@ class WikidataClaimValue:
 
     def to_json(self) -> Optional[Dict[str, Any]]:
         """Serialize the claim value to a JSON object."""
-        if not self:
-            return None
-
         # value serialization
         if hasattr(self.value, "to_json"):
             value_json = self.value.to_json()
         else:
             value_json = str(self.value)
 
-        # If the value is an entity, normalize its JSON shape like your original logic.
         if isinstance(self.value, WikidataEntity) and isinstance(value_json, dict):
             id_name = "QID" if self.claim.datatype == "wikibase-item" else "PID"
             entity_id = value_json.get("QID") or value_json.get("PID")
@@ -303,13 +351,17 @@ class WikidataClaimValue:
                 "label": str(value_json.get("label")),
             }
 
+        if not value_json:
+            return None
+
         out: Dict[str, Any] = {"value": value_json}
 
         if self.qualifiers:
-            out["qualifiers"] = [q.to_json() for q in self.qualifiers if q]
+            qualifiers = [q.to_json() for q in self.qualifiers]
+            out["qualifiers"] = [q for q in qualifiers if q]  # filter out empty qualifiers
 
         if self.references:
-            out["references"] = [[r.to_json() for r in ref if r] for ref in self.references]
+            out["references"] = [[r.to_json() for r in ref] for ref in self.references]
 
         if self.rank:
             out["rank"] = self.rank
@@ -318,17 +370,22 @@ class WikidataClaimValue:
 
     def to_triplet(self) -> str:
         """Render the value as triplet text."""
-        if not self:
-            return ""
-
-        s = str(self.value)
+        s = None
         if isinstance(self.value, WikidataEntity):
-            s = f"{str(self.value.label)} ({self.value.id})"
+            label = str(self.value.label) if bool(self.value) else "<no label>"
+            s = f"{label} ({self.value.id})"
+        else:
+            s = str(self.value)
+
+        # TODO: Consider showing qualifiers even if the main value is missing
+        if not s:
+            return ""
 
         if self.rank == "deprecated":
             s += " [deprecated]"
 
-        q_lines = [q.to_triplet(as_qualifier=True) for q in self.qualifiers if q]
+        q_lines = [q.to_triplet(as_qualifier=True) for q in self.qualifiers]
+        q_lines = [q for q in q_lines if q]  # filter out empty
         if q_lines:
             s += f" | {' | '.join(q_lines)}"
         return s

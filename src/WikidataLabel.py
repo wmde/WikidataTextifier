@@ -496,3 +496,14 @@ class LazyLabelFactory:
         """
         self.lang = lang
         self.resolve_all()
+
+    @staticmethod
+    def resolve_labels_in_json(data):
+        """Recursively resolve any LazyLabel instances in a nested data structure."""
+        if isinstance(data, LazyLabel):
+            return data.factory._resolved_labels.get(data.qid, {})
+        if isinstance(data, dict):
+            data = {key: LazyLabelFactory.resolve_labels_in_json(value) for key, value in data.items()}
+        elif isinstance(data, list):
+            data = [LazyLabelFactory.resolve_labels_in_json(item) for item in data]
+        return data
