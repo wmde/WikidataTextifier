@@ -52,10 +52,7 @@ class WikidataMonolingualText:
 
     def to_json(self) -> Optional[str]:
         """Serialize to a JSON object."""
-        return {
-            "text": self.text,
-            "lang": self.lang
-        }
+        return {"text": self.text, "lang": self.lang}
 
 
 @dataclass(slots=True)
@@ -73,10 +70,7 @@ class WikidataCoordinates:
     def __bool__(self) -> bool:
         """Return whether both latitude and longitude are present."""
         # coordinates are meaningful if we have both lat/lon
-        return (
-            self.latitude is not None
-            and self.longitude is not None
-        )
+        return self.latitude is not None and self.longitude is not None
 
     def to_json(self) -> Dict[str, Any]:
         """Serialize coordinates to a JSON object."""
@@ -164,11 +158,7 @@ class WikidataEntity:
 
     def __bool__(self) -> bool:
         """Return whether this entity has a usable id and label."""
-        return (
-            bool(self.id)
-            and self.label is not None
-            and str(self.label) != ""
-        )
+        return bool(self.id) and self.label is not None and str(self.label) != ""
 
     def to_text(self, lang="en") -> str:
         """Render the entity into a readable text."""
@@ -184,7 +174,7 @@ class WikidataEntity:
             string += f" {lang_var[', '].join(map(str, self.aliases))}"
 
         attributes = [c.to_text(lang) for c in self.claims]
-        attributes= [a for a in attributes if a]  # filter out empty attributes
+        attributes = [a for a in attributes if a]  # filter out empty attributes
 
         if len(attributes) > 0:
             attributes = "\n- ".join(attributes)
@@ -236,10 +226,7 @@ class WikidataClaim:
 
     def __bool__(self) -> bool:
         """Return whether this claim contains a value."""
-        return (
-            bool(self.property)
-            and any(bool(v) for v in self.values)
-        )
+        return bool(self.property) and any(bool(v) for v in self.values)
 
     def to_text(self, lang="en") -> str:
         """Render the claim into a readable text."""
@@ -302,8 +289,8 @@ class WikidataClaimValue:
     value: Optional[
         Union[
             WikidataEntity, WikidataQuantity, WikidataTime, WikidataCoordinates, WikidataText, WikidataMonolingualText
-            ]
-        ] = None
+        ]
+    ] = None
     qualifiers: List[WikidataClaim] = field(default_factory=list)
     references: List[List[WikidataClaim]] = field(default_factory=list)
     rank: Optional[str] = None  # preferred|normal|deprecated

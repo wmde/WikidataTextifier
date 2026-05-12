@@ -1,4 +1,4 @@
-"""Normalize Wikidata Action API JSON into internal textifier objects."""
+"""Normalize Wikidata/Wikibase Action API JSON into internal textifier objects."""
 
 from __future__ import annotations
 

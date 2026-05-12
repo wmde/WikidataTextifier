@@ -1,4 +1,4 @@
-"""Public package exports for Wikidata textification primitives."""
+"""Public package exports for textification primitives."""
 
 from .Normalizer import JSONNormalizer, TTLNormalizer
 from .Textifier import (

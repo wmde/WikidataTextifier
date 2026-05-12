@@ -46,7 +46,7 @@ uv run pytest -q tests/unit
 Run integration tests only:
 
 ```bash
-uv run pytest -q tests/integration -m integration
+uv run pytest -q tests/integration
 ```
 
 Run all tests:

@@ -1,4 +1,4 @@
-"""HTTP helpers and value-formatting utilities for Wikidata APIs."""
+"""HTTP helpers and value-formatting utilities for Wikidata/Wikibase APIs."""
 
 import html
 import json
@@ -8,6 +8,7 @@ import requests
 from requests.adapters import HTTPAdapter
 
 REQUEST_TIMEOUT_SECONDS = float(os.environ.get("REQUEST_TIMEOUT_SECONDS", "15"))
+USER_AGENT = os.environ.get("USER_AGENT", "Wikidata Textifier (embeddings@wikimedia.de)")
 
 SESSION = requests.Session()
 adapter = HTTPAdapter(pool_connections=20, pool_maxsize=20)
@@ -17,27 +18,29 @@ SESSION.mount("https://", adapter)
 
 def get_wikidata_ttl_by_id(
     id,
+    wb_url="https://www.wikidata.org",
     lang="en",
 ):
-    """Fetch a Wikidata entity as TTL from ``Special:EntityData``.
+    """Fetch an entity as TTL from ``Special:EntityData``.
 
     Args:
-        id (str): Wikidata entity ID, for example ``"Q42"`` or ``"P31"``.
+        id (str): Entity ID, for example ``"Q42"`` or ``"P31"``.
+        wb_url (str): Wikibase base URL (default is Wikidata ``https://www.wikidata.org``).
         lang (str, optional): Language code for server-side label rendering.
 
     Returns:
         str: TTL document for the requested entity.
 
     Raises:
-        requests.HTTPError: If Wikidata returns an error response.
+        requests.HTTPError: If the upstream Wikibase returns an error response.
     """
     params = {
         "uselang": lang,
     }
-    headers = {"User-Agent": "Wikidata Textifier (embeddings@wikimedia.de)"}
+    headers = {"User-Agent": USER_AGENT}
 
     response = SESSION.get(
-        f"https://www.wikidata.org/wiki/Special:EntityData/{id}.ttl",
+        f"{wb_url}/wiki/Special:EntityData/{id}.ttl",
         params=params,
         headers=headers,
         timeout=REQUEST_TIMEOUT_SECONDS,
@@ -46,18 +49,24 @@ def get_wikidata_ttl_by_id(
     return response.text
 
 
-def get_wikidata_json_by_ids(ids, props="labels|descriptions|aliases|claims"):
-    """Fetch one or more Wikidata entities from ``wbgetentities``.
+def get_wikidata_json_by_ids(
+    ids,
+    action_api_url="https://www.wikidata.org/w/api.php",
+    props="labels|descriptions|aliases|claims",
+):
+    """Fetch one or more entities from ``wbgetentities``.
 
     Args:
         ids (list[str] | str): Entity IDs as a list or ``|``-separated string.
+        action_api_url (str): Full Action API URL (default is
+            ``https://www.wikidata.org/w/api.php``).
         props (str): Pipe-delimited properties requested from the API.
 
     Returns:
         dict[str, dict]: Mapping of entity IDs to API entity payloads.
 
     Raises:
-        requests.HTTPError: If Wikidata returns an error response.
+        requests.HTTPError: If the upstream Wikibase returns an error response.
     """
     if isinstance(ids, str):
         ids = ids.split("|")
@@ -65,8 +74,7 @@ def get_wikidata_json_by_ids(ids, props="labels|descriptions|aliases|claims"):
 
     entities_data = {}
 
-    # Wikidata API has a limit on the number of IDs per request,
-    # typically 50 for wbgetentities.
+    # wbgetentities has a limit on number of IDs per request (typically 50).
     for chunk_idx in range(0, len(ids), 50):
         ids_chunk = ids[chunk_idx : chunk_idx + 50]
         params = {
@@ -76,10 +84,10 @@ def get_wikidata_json_by_ids(ids, props="labels|descriptions|aliases|claims"):
             "format": "json",
             "origin": "*",
         }
-        headers = {"User-Agent": "Wikidata Textifier (embeddings@wikimedia.de)"}
+        headers = {"User-Agent": USER_AGENT}
 
         response = SESSION.get(
-            "https://www.wikidata.org/w/api.php?",
+            action_api_url,
             params=params,
             headers=headers,
             timeout=REQUEST_TIMEOUT_SECONDS,
@@ -129,7 +137,7 @@ def wikidata_time_to_text(value: dict, lang: str = "en"):
             "before": value.get("before", 0),
             "after": value.get("after", 0),
             "precision": value.get("precision", 10),
-            "calendarmodel": value.get("calendarmodel", "Q1985786"),
+            "calendarmodel": value.get("calendarmodel", "Q12138"),
         },
     }
 

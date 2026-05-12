@@ -10,7 +10,6 @@ from urllib.request import Request, urlopen
 import pymysql
 import pytest
 
-pytestmark = pytest.mark.integration
 LOCAL_BASE_URL = "http://127.0.0.1:5000"
 
 

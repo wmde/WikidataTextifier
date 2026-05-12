@@ -49,7 +49,8 @@ def test_get_all_missing_labels_ids_collects_nested_ids():
 def test_lazy_label_factory_resolves_pending_labels_in_bulk(monkeypatch):
     """It should resolve pending IDs via a single bulk lookup when cast to ``str``."""
 
-    def fake_get_bulk_labels(ids):
+    def fake_get_bulk_labels(ids, wb_url="https://www.wikidata.org"):
+        del wb_url
         return {"Q42": {"en": "Douglas Adams"}}
 
     monkeypatch.setattr(WikidataLabel, "get_bulk_labels", staticmethod(fake_get_bulk_labels))
@@ -58,3 +59,20 @@ def test_lazy_label_factory_resolves_pending_labels_in_bulk(monkeypatch):
     lazy_label = factory.create("Q42")
 
     assert str(lazy_label) == "Douglas Adams"
+
+
+def test_lazy_label_factory_forwards_wikibase_url(monkeypatch):
+    """It should forward the configured Wikibase URL to bulk label lookups."""
+    calls = []
+
+    def fake_get_bulk_labels(ids, wb_url="https://www.wikidata.org"):
+        calls.append((list(ids), wb_url))
+        return {"Q42": {"en": "Douglas Adams"}}
+
+    monkeypatch.setattr(WikidataLabel, "get_bulk_labels", staticmethod(fake_get_bulk_labels))
+
+    factory = LazyLabelFactory(lang="en", fallback_lang="en", wb_url="https://example.wikibase.local/")
+    lazy_label = factory.create("Q42")
+
+    assert str(lazy_label) == "Douglas Adams"
+    assert calls == [(["Q42"], "https://example.wikibase.local")]

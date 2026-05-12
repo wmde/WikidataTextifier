@@ -1,4 +1,4 @@
-"""FastAPI application that exposes Wikidata textification endpoints."""
+"""FastAPI application that exposes Wikidata/Wikibase textification endpoints."""
 
 import os
 import time
@@ -9,7 +9,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src import utils
-from src.Normalizer import JSONNormalizer, TTLNormalizer
+from src.Normalizer import JSONNormalizer
 from src.WikidataLabel import LazyLabelFactory, WikidataLabel
 
 # Start Fastapi app
@@ -45,7 +45,7 @@ async def startup():
     "/",
     responses={
         200: {
-            "description": "Returns a list of relevant Wikidata property PIDs with similarity scores",
+            "description": "Returns textified entities keyed by requested IDs",
             "content": {
                 "application/json": {
                     "example": [
@@ -57,8 +57,21 @@ async def startup():
             },
         },
         422: {
-            "description": "Missing or invalid query parameter",
-            "content": {"application/json": {"example": {"detail": "Invalid format specified"}}},
+            "description": "Validation error for missing or invalid query parameters",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": [
+                            {
+                                "type": "missing",
+                                "loc": ["query", "id"],
+                                "msg": "Field required",
+                                "input": None,
+                            }
+                        ]
+                    }
+                }
+            },
         },
     },
 )
@@ -74,15 +87,16 @@ async def get_textified_wd(
     all_ranks: bool = False,
     qualifiers: bool = True,
     fallback_lang: str = "en",
+    action_api_url: str = "https://www.wikidata.org/w/api.php",
 ):
-    """Retrieve Wikidata entities as structured JSON, natural text, or triplet lines.
+    """Retrieve entities as structured JSON, natural text, or triplet lines.
 
     This endpoint fetches one or more entities, resolves missing labels, and normalizes
     claims into a compact representation suitable for downstream LLM use.
 
     **Args:**
 
-    - **id** (str): Comma-separated Wikidata IDs to fetch (for example: `"Q42"` or `"Q42,Q2"`).
+    - **id** (str): Comma-separated entity IDs to fetch (for example: `"Q42"` or `"Q42,Q2"`).
     - **pid** (str, optional): Comma-separated property IDs used to filter returned claims (for example: `"P31,P279"`).
     - **lang** (str): Preferred language code for labels and formatted values.
     - **format** (str): Output format. One of `"json"`, `"text"`, or `"triplet"`.
@@ -91,6 +105,8 @@ async def get_textified_wd(
     - **all_ranks** (bool): If `true`, include preferred, normal, and deprecated statement ranks.
     - **qualifiers** (bool): If `true`, include qualifiers for claim values.
     - **fallback_lang** (str): Fallback language used when `lang` is unavailable.
+    - **action_api_url** (str): Action API URL
+      (default: `https://www.wikidata.org/w/api.php`).
 
     **Returns:**
 
@@ -107,74 +123,44 @@ async def get_textified_wd(
             filter_pids = [p.strip() for p in pid.split(",")]
 
         qids = [q.strip() for q in id.split(",")]
-        label_factory = LazyLabelFactory(lang=lang, fallback_lang=fallback_lang)
+        label_factory = LazyLabelFactory(lang=lang, fallback_lang=fallback_lang, wb_url=action_api_url)
 
+        # JSON is used with Action API for bulk retrieval
         entities = {}
-        if len(qids) == 1:
-            # When one QID is requested, TTL is used
-            try:
-                entity_data = utils.get_wikidata_ttl_by_id(qids[0], lang=lang)
-            except requests.HTTPError:
-                entity_data = None
+        try:
+            entity_data = utils.get_wikidata_json_by_ids(qids, action_api_url=action_api_url)
+        except requests.HTTPError:
+            entity_data = None
+        if not entity_data:
+            response = "IDs not found"
+            raise HTTPException(status_code=404, detail=response)
 
-            if not entity_data:
-                response = "ID not found"
-                raise HTTPException(status_code=404, detail=response)
-
-            entity_data = TTLNormalizer(
-                entity_id=qids[0],
-                ttl_text=entity_data,
+        entity_data = {
+            qid: JSONNormalizer(
+                entity_id=qid,
+                entity_json=entity_data[qid],
                 lang=lang,
                 fallback_lang=fallback_lang,
                 label_factory=label_factory,
                 debug=False,
             )
+            if entity_data.get(qid)
+            else None
+            for qid in qids
+        }
 
-            entities = {
-                qids[0]: entity_data.normalize(
-                    external_ids=external_ids,
-                    all_ranks=all_ranks,
-                    references=references,
-                    filter_pids=filter_pids,
-                    qualifiers=qualifiers,
-                )
-            }
-        else:
-            # JSON is used with Action API for bulk retrieval
-            try:
-                entity_data = utils.get_wikidata_json_by_ids(qids)
-            except requests.HTTPError:
-                entity_data = None
-            if not entity_data:
-                response = "IDs not found"
-                raise HTTPException(status_code=404, detail=response)
-
-            entity_data = {
-                qid: JSONNormalizer(
-                    entity_id=qid,
-                    entity_json=entity_data[qid],
-                    lang=lang,
-                    fallback_lang=fallback_lang,
-                    label_factory=label_factory,
-                    debug=False,
-                )
-                if entity_data.get(qid)
-                else None
-                for qid in qids
-            }
-
-            entities = {
-                qid: entity.normalize(
-                    external_ids=external_ids,
-                    all_ranks=all_ranks,
-                    references=references,
-                    filter_pids=filter_pids,
-                    qualifiers=qualifiers,
-                )
-                if entity
-                else None
-                for qid, entity in entity_data.items()
-            }
+        entities = {
+            qid: entity.normalize(
+                external_ids=external_ids,
+                all_ranks=all_ranks,
+                references=references,
+                filter_pids=filter_pids,
+                qualifiers=qualifiers,
+            )
+            if entity
+            else None
+            for qid, entity in entity_data.items()
+        }
 
         return_data = {}
         for qid, entity in entities.items():
