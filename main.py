@@ -57,8 +57,21 @@ async def startup():
             },
         },
         422: {
-            "description": "Missing or invalid query parameter",
-            "content": {"application/json": {"example": {"detail": "Invalid format specified"}}},
+            "description": "Validation error for missing or invalid query parameters",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": [
+                            {
+                                "type": "missing",
+                                "loc": ["query", "id"],
+                                "msg": "Field required",
+                                "input": None,
+                            }
+                        ]
+                    }
+                }
+            },
         },
     },
 )
@@ -74,7 +87,7 @@ async def get_textified_wd(
     all_ranks: bool = False,
     qualifiers: bool = True,
     fallback_lang: str = "en",
-    wb_url: str = "https://www.wikidata.org",
+    action_api_url: str = "https://www.wikidata.org/w/api.php",
 ):
     """Retrieve entities as structured JSON, natural text, or triplet lines.
 
@@ -92,7 +105,8 @@ async def get_textified_wd(
     - **all_ranks** (bool): If `true`, include preferred, normal, and deprecated statement ranks.
     - **qualifiers** (bool): If `true`, include qualifiers for claim values.
     - **fallback_lang** (str): Fallback language used when `lang` is unavailable.
-    - **wb_url** (str): Wikibase base URL (default: `https://www.wikidata.org`).
+    - **action_api_url** (str): Action API URL
+      (default: `https://www.wikidata.org/w/api.php`).
 
     **Returns:**
 
@@ -109,12 +123,12 @@ async def get_textified_wd(
             filter_pids = [p.strip() for p in pid.split(",")]
 
         qids = [q.strip() for q in id.split(",")]
-        label_factory = LazyLabelFactory(lang=lang, fallback_lang=fallback_lang, wb_url=wb_url)
+        label_factory = LazyLabelFactory(lang=lang, fallback_lang=fallback_lang, wb_url=action_api_url)
 
         # JSON is used with Action API for bulk retrieval
         entities = {}
         try:
-            entity_data = utils.get_wikidata_json_by_ids(qids, wb_url=wb_url)
+            entity_data = utils.get_wikidata_json_by_ids(qids, action_api_url=action_api_url)
         except requests.HTTPError:
             entity_data = None
         if not entity_data:

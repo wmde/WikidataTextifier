@@ -37,7 +37,7 @@ API Docs: [wd-textify.wmcloud.org/docs](https://wd-textify.wmcloud.org/docs)
 | `all_ranks` | bool | No | Include all statement ranks instead of preferred/normal filtering (default: `false`). |
 | `qualifiers` | bool | No | Include qualifiers in claim values (default: `true`). |
 | `references` | bool | No | Include references in claim values (default: `false`). |
-| `wb_url` | string | No | Wikibase base URL (default: `https://www.wikidata.org`). |
+| `action_api_url` | string | No | Action API URL (default: `https://www.wikidata.org/w/api.php`). |
 
 #### Example requests
 

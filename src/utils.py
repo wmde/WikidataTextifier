@@ -49,12 +49,17 @@ def get_wikidata_ttl_by_id(
     return response.text
 
 
-def get_wikidata_json_by_ids(ids, wb_url="https://www.wikidata.org", props="labels|descriptions|aliases|claims"):
+def get_wikidata_json_by_ids(
+    ids,
+    action_api_url="https://www.wikidata.org/w/api.php",
+    props="labels|descriptions|aliases|claims",
+):
     """Fetch one or more entities from ``wbgetentities``.
 
     Args:
         ids (list[str] | str): Entity IDs as a list or ``|``-separated string.
-        wb_url (str): Wikibase base URL (default is Wikidata ``https://www.wikidata.org``).
+        action_api_url (str): Full Action API URL (default is
+            ``https://www.wikidata.org/w/api.php``).
         props (str): Pipe-delimited properties requested from the API.
 
     Returns:
@@ -82,7 +87,7 @@ def get_wikidata_json_by_ids(ids, wb_url="https://www.wikidata.org", props="labe
         headers = {"User-Agent": USER_AGENT}
 
         response = SESSION.get(
-            f"{wb_url}/w/api.php?",
+            action_api_url,
             params=params,
             headers=headers,
             timeout=REQUEST_TIMEOUT_SECONDS,

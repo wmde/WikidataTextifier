@@ -333,7 +333,7 @@ class WikidataLabel(Base):
         Returns:
             dict[str, dict]: Mapping of each ID to compressed labels.
         """
-        entities_data = get_wikidata_json_by_ids(ids, wb_url=wb_url, props="labels")
+        entities_data = get_wikidata_json_by_ids(ids, action_api_url=wb_url, props="labels")
         entities_data = WikidataLabel._compress_labels(entities_data)
         return entities_data
 

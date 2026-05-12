@@ -13,9 +13,13 @@ def test_get_textified_wd_uses_json_normalizer_for_single_qid(monkeypatch, run_a
     """Validate ``JSONNormalizer`` is used for single-QID requests."""
     calls = {}
 
-    def fake_get_json(ids, wb_url="https://www.wikidata.org", props="labels|descriptions|aliases|claims"):
+    def fake_get_json(
+        ids,
+        action_api_url="https://www.wikidata.org/w/api.php",
+        props="labels|descriptions|aliases|claims",
+    ):
         calls["requested_ids"] = ids
-        calls["wb_url"] = wb_url
+        calls["action_api_url"] = action_api_url
         calls["props"] = props
         return {
             "Q42": {"labels": {"en": {"value": "Douglas Adams"}}, "descriptions": {}, "aliases": {}, "claims": {}},
@@ -41,12 +45,12 @@ def test_get_textified_wd_uses_json_normalizer_for_single_qid(monkeypatch, run_a
             id="Q42",
             pid=None,
             format="json",
-            wb_url="https://example.wikibase.local",
+            action_api_url="https://example.wikibase.local/w/api.php",
         )
     )
 
     assert calls["requested_ids"] == ["Q42"]
-    assert calls["wb_url"] == "https://example.wikibase.local"
+    assert calls["action_api_url"] == "https://example.wikibase.local/w/api.php"
     assert calls["normalizer_entity_id"] == "Q42"
     assert result["Q42"]["QID"] == "Q42"
     assert result["Q42"]["label"] == "Douglas Adams"
@@ -56,8 +60,12 @@ def test_get_textified_wd_uses_json_normalizer_for_multiple_qids(monkeypatch, ru
     """Validate ``JSONNormalizer`` is used for multi-QID requests."""
     init_calls = []
 
-    def fake_get_json(ids, wb_url="https://www.wikidata.org", props="labels|descriptions|aliases|claims"):
-        del wb_url, props
+    def fake_get_json(
+        ids,
+        action_api_url="https://www.wikidata.org/w/api.php",
+        props="labels|descriptions|aliases|claims",
+    ):
+        del action_api_url, props
         return {
             "Q1": {"labels": {"en": {"value": "One"}}, "descriptions": {}, "aliases": {}, "claims": {}},
             "Q2": {"labels": {"en": {"value": "Two"}}, "descriptions": {}, "aliases": {}, "claims": {}},
