@@ -20,6 +20,11 @@ API Docs: [wd-textify.wmcloud.org/docs](https://wd-textify.wmcloud.org/docs)
 - `text`: Readable summary including label, description, aliases, and attributes.
 - `triplet`: Triplet-style lines with labels and IDs for graph-style traversal.
 
+## Future Plan
+
+- Replace Action API with GraphQL once Wikibase GraphQL is available for Wikibases:
+  [Wikidata: Wikibase GraphQL](https://www.wikidata.org/wiki/Wikidata:Wikibase_GraphQL)
+
 ## API
 
 ### `GET /`
