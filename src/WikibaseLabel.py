@@ -20,7 +20,7 @@ LABEL_UNLIMITED = os.environ.get("LABEL_UNLIMITED", "false") == "true"
 LABEL_TTL_DAYS = int(os.environ.get("LABEL_TTL_DAYS", "90"))
 LABEL_MAX_ROWS = int(os.environ.get("LABEL_MAX_ROWS", "10000000"))
 REQUEST_TIMEOUT_SECONDS = float(os.environ.get("REQUEST_TIMEOUT_SECONDS", "15"))
-DEFAULT_WIKIBASE_URL = "https://www.wikidata.org"
+DEFAULT_WIKIBASE_URL = "https://www.wikidata.org/w/api.php"
 
 DATABASE_URL = f"mariadb+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 
